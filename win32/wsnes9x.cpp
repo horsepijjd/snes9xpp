@@ -43,6 +43,7 @@
 #include "../cheats.h"
 #include "../netplay.h"
 #include "../apu/apu.h"
+#include "kaillera.h"
 #include "../movie.h"
 #include "../controls.h"
 #include "../conffile.h"
@@ -71,13 +72,14 @@
 #include "../language.h"
 
 #include <commctrl.h>
+#include "../unzip/zip.h"
 #include <io.h>
 #include <time.h>
 #include <direct.h>
 
 extern SNPServer NPServer;
 
-#include <ctype.h>
+bool S9xKailleraCanLoadState(void);
 
 #ifdef _MSC_VER
 #define F_OK 0
@@ -112,6 +114,10 @@ void WinShowCheatEditorDialog();
 void WinShowCheatSearchDialog();
 
 VOID CALLBACK HotkeyTimer( UINT idEvent, UINT uMsg, DWORD dwUser, DWORD dw1, DWORD dw2);
+
+#ifdef NETPLAY_SUPPORT
+VOID CALLBACK ServerTimer( UINT idEvent, UINT uMsg, DWORD dwUser, DWORD dw1, DWORD dw2);
+#endif
 
 void S9xDetectJoypads();
 
@@ -416,9 +422,10 @@ struct SCustomKeys CustomKeys = {
     {0,0}, // Load File Select
     {0,0}, // Mute
     {0,0}, // Aspect ratio
+    {0,0}, // Kaillera chat
     {'G', CUSTKEY_ALT_MASK}, // Cheat Editor Dialog
     {'A', CUSTKEY_ALT_MASK}, // Cheat Search Dialog
-};
+ };
 
 struct SSoundRates
 {
@@ -454,6 +461,7 @@ struct OpenMovieParams
 {
 	TCHAR Path[_MAX_PATH];
 	bool8 ReadOnly;
+	bool8 RecordAVI;
 	bool8 DisplayInput;
 	uint8 ControllersMask;
 	uint8 Opts;
@@ -482,7 +490,58 @@ static bool LoadROMMulti (const TCHAR *filename, const TCHAR *filename2);
 bool8 S9xLoadROMImage (const TCHAR *string);
 #ifdef NETPLAY_SUPPORT
 static void EnableServer (bool8 enable);
+static void ResetServerTimer ();
 #endif
+
+static bool loadingROMForKaillera = false;
+static bool startingMovie = false;
+static bool autoMovieAVIRecording = false;
+static bool autoMovieAVIRestoreTurbo = false;
+
+static void BuildAutoMovieAviPath(const TCHAR *moviePath, TCHAR aviPath[_MAX_PATH])
+{
+	TCHAR drive[_MAX_DRIVE + 1];
+	TCHAR dir[_MAX_DIR + 1];
+	TCHAR fname[_MAX_FNAME + 1];
+	TCHAR ext[_MAX_EXT + 1];
+	_tsplitpath(moviePath, drive, dir, fname, ext);
+	_tmakepath(aviPath, drive, dir, fname, TEXT("avi"));
+}
+
+static void StopAutoMovieAviRecording()
+{
+	if (!autoMovieAVIRecording)
+		return;
+
+	autoMovieAVIRecording = false;
+	Settings.TurboMode = autoMovieAVIRestoreTurbo;
+}
+
+static void StartAutoMovieAviRecording(const TCHAR *moviePath)
+{
+	if (GUI.AVIOut || !moviePath || !moviePath[0])
+		return;
+
+	TCHAR aviPath[_MAX_PATH];
+	BuildAutoMovieAviPath(moviePath, aviPath);
+	DoAVIOpen(aviPath);
+	if (GUI.AVIOut)
+	{
+		autoMovieAVIRecording = true;
+		autoMovieAVIRestoreTurbo = Settings.TurboMode;
+		Settings.TurboMode = true;
+	}
+}
+
+/* Exposed to kaillera.cpp so GameCallback can load a ROM synchronously
+ * while running inside kailleraSelectServerDialog's modal loop.           */
+bool WinLoadROMForKaillera(const TCHAR *filename)
+{
+    loadingROMForKaillera = true;
+    bool result = LoadROM(filename);
+    loadingROMForKaillera = false;
+    return result;
+}
 void WinDeleteRecentGamesList ();
 const TCHAR* WinParseCommandLineAndLoadConfigFile (TCHAR *line);
 void WinRegisterConfigItems ();
@@ -675,6 +734,47 @@ void ChangeInputDevice(void)
     GUI.ControlForced = 0xff;
 }
 
+void WinApplyControllerType(int port, uint8 type)
+{
+    (void) port;
+
+    if (type >= SNES_MAX_CONTROLLER_OPTIONS)
+        return;
+
+    GUI.ControllerOption = type;
+    ChangeInputDevice();
+
+    if (Settings.NetPlay && NetPlay.Connected)
+        S9xNPResetJoypadReadPos();
+}
+
+static void WinTryChangeControllerOption(int option)
+{
+    if (option < 0 || option >= SNES_MAX_CONTROLLER_OPTIONS)
+        return;
+
+    if (Settings.NetPlay && NetPlay.Connected)
+    {
+        if (NetPlay.Player != 1)
+        {
+            S9xNPSetWarning("Netplay: Only Player 1 can change controller type.");
+            return;
+        }
+
+        // Send controller type change to server - P1 will apply it when receiving the broadcast
+        // like all other clients to ensure synchronization
+        if (!S9xNPSendControllerType(0, (uint8) option))
+            return;
+
+        // Don't apply locally here - wait for the broadcast to ensure all clients apply at the same time
+        return;
+    }
+
+    // Non-netplay: apply immediately
+    GUI.ControllerOption = option;
+    ChangeInputDevice();
+}
+
 static void CenterCursor()
 {
 	if(GUI.ControllerOption==SNES_MOUSE || GUI.ControllerOption==SNES_MOUSE_SWAPPED)
@@ -702,6 +802,50 @@ static void CenterCursor()
 	}
 }
 
+#ifdef NETPLAY_SUPPORT
+VOID CALLBACK ServerTimer( UINT idEvent, UINT uMsg, DWORD dwUser, DWORD dw1, DWORD dw2)
+{
+	if (!Settings.NetPlayServer)
+		return;
+
+	if ((Settings.Paused && !Settings.FrameAdvance) || Settings.StopEmulation || Settings.ForcedPause)
+	{
+		WaitForSingleObject (GUI.ServerTimerSemaphore, 0);
+		return;
+	}
+
+	ReleaseSemaphore (GUI.ServerTimerSemaphore, 1, NULL);
+}
+
+static void UpdateNetplayPauseState ()
+{
+	static bool8 guiPauseSent = FALSE;
+	bool8 paused = FALSE;
+
+	if (!Settings.NetPlay || !NetPlay.Connected)
+	{
+		guiPauseSent = FALSE;
+		return;
+	}
+
+	paused = ((Settings.Paused && !Settings.FrameAdvance) || Settings.ForcedPause) ? TRUE : FALSE;
+
+	if (paused)
+	{
+		if (!guiPauseSent)
+		{
+			S9xNPSendPause (TRUE);
+			guiPauseSent = TRUE;
+		}
+	}
+	else if (guiPauseSent && !NetPlay.Waiting4EmulationThread)
+	{
+		S9xNPSendPause (FALSE);
+		guiPauseSent = FALSE;
+	}
+}
+#endif
+
 
 void S9xRestoreWindowTitle ()
 {
@@ -710,10 +854,10 @@ void S9xRestoreWindowTitle ()
     {
         char def[_MAX_FNAME];
         _splitpath(Memory.ROMFilename.c_str(), NULL, NULL, def, NULL);
-        _stprintf(buf, TEXT("%s - %s %s"), (wchar_t *)Utf8ToWide(def), WINDOW_TITLE, TEXT(VERSION));
+        _stprintf(buf, TEXT("%s - %s"), (wchar_t *)Utf8ToWide(def), WINDOW_TITLE);
     }
     else
-        _stprintf(buf, TEXT("%s %s"), WINDOW_TITLE, TEXT(VERSION));
+        _stprintf(buf, TEXT("%s"), WINDOW_TITLE);
 
     SetWindowText (GUI.hWnd, buf);
 }
@@ -854,6 +998,11 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam)
     {
         return 0;
     }
+
+	if((S9xKailleraWantsKeyboardCapture() || S9xNPChatWantsKeyboardCapture()) && !(wParam & 0x8000))
+	{
+		return 0;
+	}
 
 	if(!(wParam == 0 || wParam == VK_ESCAPE)) // if it's the 'disabled' key, it's never pressed as a hotkey
 	{
@@ -1258,6 +1407,16 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam)
             }
             hitHotKey = true;
         }
+        if (wParam == CustomKeys.KailleraChat.key
+            && modifiers == CustomKeys.KailleraChat.modifiers)
+        {
+            bool swallow_char = !(modifiers & (CUSTKEY_CTRL_MASK | CUSTKEY_ALT_MASK)) &&
+                ((MapVirtualKey((UINT)wParam, MAPVK_VK_TO_CHAR) & 0x7fff) != 0);
+            if (S9xKailleraOpenChat(swallow_char) || S9xNPChatOpen(swallow_char))
+            {
+                hitHotKey = true;
+            }
+        }
         if (wParam == CustomKeys.CheatEditorDialog.key
             && modifiers == CustomKeys.CheatEditorDialog.modifiers)
         {
@@ -1288,6 +1447,12 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam)
             {
                 WinShowCheatSearchDialog();
             }
+            hitHotKey = true;
+        }
+        if (wParam == CustomKeys.SaveROM.key
+            && modifiers == CustomKeys.SaveROM.modifiers)
+        {
+            WinSaveROM();
             hitHotKey = true;
         }
 
@@ -1547,10 +1712,10 @@ bool WinMoviePlay(LPCTSTR filename)
 		S9xSetInfoString(_tToChar(err_string));
 		return false;
 	}
+	if (!KailleraConfig.NeverBlockSRAMSave)
+		GUI.BlockSRAMSave = true;
 	return true;
 }
-
-static bool startingMovie = false;
 
 HWND cheatSearchHWND = NULL;
 
@@ -1601,19 +1766,34 @@ LRESULT CALLBACK WinProc(
 		DragAcceptFiles(hWnd, TRUE);
 		return 0;
 	case WM_KEYDOWN:
+		if(S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
+			return 0;
+		if(S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+			return 0;
 		if(GUI.BackgroundInput && !GUI.InactivePause)
 			break;
 	case WM_CUSTKEYDOWN:
 	case WM_SYSKEYDOWN:
 		{
+			if(S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
+				return 0;
+			if(S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+				return 0;
 			if(!HandleKeyMessage(wParam,lParam))
 				return 0;
 	        break;
 		}
 
 	case WM_KEYUP:
+	case WM_SYSKEYUP:
 	case WM_CUSTKEYUP:
 		{
+			if(S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
+				return 0;
+			if(S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+				return 0;
+			if((S9xKailleraWantsKeyboardCapture() || S9xNPChatWantsKeyboardCapture()) && !(wParam & 0x8000))
+				return 0;
 			int modifiers = 0;
 			if(GetAsyncKeyState(VK_MENU) || wParam == VK_MENU)
 				modifiers |= CUSTKEY_ALT_MASK;
@@ -1639,6 +1819,14 @@ LRESULT CALLBACK WinProc(
             }
 
 		}
+		break;
+
+	case WM_CHAR:
+	case WM_SYSCHAR:
+		if(S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
+			return 0;
+		if(S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+			return 0;
 		break;
 
 	case WM_DROPFILES:
@@ -1716,11 +1904,21 @@ LRESULT CALLBACK WinProc(
 			}
 			break;
 		case ID_FILE_STOP_AVI:
+			StopAutoMovieAviRecording();
 			DoAVIClose(0);
 			ReInitSound();				// reenable sound output
 			break;
 		case ID_FILE_MOVIE_STOP:
+			StopAutoMovieAviRecording();
+			if (GUI.AVIOut)
+			{
+				DoAVIClose(0);
+				ReInitSound();
+			}
 			S9xMovieStop(FALSE);
+			break;
+		case ID_FILE_MOVIE_ENABLERECORDING:
+			GUI.MovieRecordOnLoad = !GUI.MovieRecordOnLoad;
 			break;
 		case ID_FILE_MOVIE_PLAY:
 			{
@@ -1747,6 +1945,10 @@ LRESULT CALLBACK WinProc(
 							break;
 						}
 						MessageBox( hWnd, err_string, SNES9X_INFO, MB_OK);
+					}
+					else if (op.RecordAVI)
+					{
+						StartAutoMovieAviRecording(op.Path);
 					}
 				}
 				RestoreSNESDisplay ();// re-enter after dialog
@@ -1785,49 +1987,76 @@ LRESULT CALLBACK WinProc(
 			}
 			break;
 		case IDM_SNES_JOYPAD:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_JOYPAD;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_JOYPAD);
 			break;
 		case IDM_ENABLE_MULTITAP:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_MULTIPLAYER5;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_MULTIPLAYER5);
 			break;
 		case IDM_SCOPE_TOGGLE:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_SUPERSCOPE;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_SUPERSCOPE);
 			break;
 		case IDM_JUSTIFIER:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_JUSTIFIER;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_JUSTIFIER);
 			break;
 		case IDM_MOUSE_TOGGLE:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_MOUSE;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_MOUSE);
 			break;
 		case IDM_MOUSE_SWAPPED:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_MOUSE_SWAPPED;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_MOUSE_SWAPPED);
 			break;
 		case IDM_MULTITAP8:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_MULTIPLAYER8;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_MULTIPLAYER8);
 			break;
 		case IDM_JUSTIFIERS:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_JUSTIFIER_2;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_JUSTIFIER_2);
 			break;
 		case IDM_MACSRIFLE_TOGGLE:
-			MOVIE_LOCKED_SETTING
-			GUI.ControllerOption = SNES_MACSRIFLE;
-			ChangeInputDevice();
+			if (S9xMovieActive() && !(Settings.NetPlay && NetPlay.Connected))
+			{
+				MessageBox(GUI.hWnd, TEXT("That setting is locked while a movie is active."), TEXT("Notice"), MB_OK | MB_ICONEXCLAMATION);
+				break;
+			}
+			WinTryChangeControllerOption(SNES_MACSRIFLE);
 			break;
 
 			//start turbo
@@ -2083,6 +2312,17 @@ LRESULT CALLBACK WinProc(
             NPServer.SyncByReset ^= TRUE;
             break;
 #endif
+        case ID_NETPLAY_KAILLERA_CLIENT:
+            RestoreGUIDisplay();
+            S9xKailleraShowClient(hWnd);
+            RestoreSNESDisplay();
+            break;
+        case ID_NETPLAY_KAILLERA_OPTIONS:
+            RestoreGUIDisplay();
+            DialogBox(g_hInst, MAKEINTRESOURCE(IDD_KAILLERA_OPTIONS),
+                      hWnd, DlgKailleraOptions);
+            RestoreSNESDisplay();
+            break;
         case ID_SOUND_8000HZ:
 		case ID_SOUND_11025HZ:
 		case ID_SOUND_16000HZ:
@@ -2236,9 +2476,12 @@ LRESULT CALLBACK WinProc(
 			S9xMessage(S9X_INFO, 0, INFO_SAVE_SPC);
 			break;
 		case ID_FILE_SAVE_SRAM_DATA: {
+			if (GUI.BlockSRAMSave) break; /* non-player-1 must not save */
 			bool8 success = Memory.SaveSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
 			if(!success)
 				S9xMessage(S9X_ERROR, S9X_FREEZE_FILE_INFO, SRM_SAVE_FAILED);
+			else
+				S9xKailleraNotifySramSaved();
 		}	break;
 		case ID_SAVEMEMPACK: {
 			std::string filename = S9xGetFilenameInc(".bs", SRAM_DIR);
@@ -2279,6 +2522,9 @@ LRESULT CALLBACK WinProc(
 		case ID_FILE_LOAD_OOPS:
 			FreezeUnfreezeSlot(-1, FALSE);
 			break;
+		case ID_FILE_SAVE_OOPS:
+			Settings.DontSaveOopsSnapshot = !Settings.DontSaveOopsSnapshot;
+			break;
         case ID_FILE_LOAD_FILE:
             FreezeUnfreezeDialog(FALSE);
             break;
@@ -2298,6 +2544,8 @@ LRESULT CALLBACK WinProc(
             WinShowCheatSearchDialog();
 			break;
 		case ID_CHEAT_APPLY:
+			if (S9xKailleraIsActive())
+				break;
 			Settings.ApplyCheats = !Settings.ApplyCheats;
 			if (!Settings.ApplyCheats){
 				S9xCheatsDisable ();
@@ -2321,6 +2569,8 @@ LRESULT CALLBACK WinProc(
 			RestoreSNESDisplay ();
 			break;
         case ID_EMULATION_HACKS:
+			if (S9xKailleraIsActive() || Settings.NetPlay)
+				break;
 			if (MessageBoxA(hWnd,
 				"The settings in this dialog should only be used for compatibility "
 				"with old ROM hacks or if you otherwise know what you're doing.\n\n"
@@ -2399,10 +2649,16 @@ LRESULT CALLBACK WinProc(
 		UpdateWindow(GUI.hWnd);
 		DrawMenuBar(GUI.hWnd);
 		S9xClearPause (PAUSE_MENU);
+	#ifdef NETPLAY_SUPPORT
+		UpdateNetplayPauseState ();
+	#endif
 		break;
 
 	case WM_ENTERMENULOOP:
 		S9xSetPause (PAUSE_MENU);
+	#ifdef NETPLAY_SUPPORT
+		UpdateNetplayPauseState ();
+	#endif
 		CheckMenuStates ();
 
 		SwitchToGDI();
@@ -2411,10 +2667,15 @@ LRESULT CALLBACK WinProc(
 
 	case WM_CLOSE:
 		SaveMainWinPos();
+		/* End Kaillera session immediately so networking tears down before destroy. */
+		S9xKailleraNotifyExit();
 		break;
 
 	case WM_DESTROY:
-		Memory.SaveSRAM(S9xGetFilename(".srm", SRAM_DIR).c_str());
+		/* Unload Kaillera client DLL and end any session (idempotent with WinMain). */
+		S9xKailleraShutdown();
+		if (!GUI.BlockSRAMSave)
+			Memory.SaveSRAM(S9xGetFilename(".srm", SRAM_DIR).c_str());
 		GUI.hWnd = NULL;
 		PostQuitMessage (0);
 		return (0);
@@ -2472,9 +2733,15 @@ LRESULT CALLBACK WinProc(
 		break;
 	case WM_ENTERSIZEMOVE:
 		S9xSetPause(PAUSE_MENU);
+	#ifdef NETPLAY_SUPPORT
+		UpdateNetplayPauseState ();
+	#endif
 		break;
 	case WM_EXITSIZEMOVE:
 		S9xClearPause(PAUSE_MENU);
+	#ifdef NETPLAY_SUPPORT
+		UpdateNetplayPauseState ();
+	#endif
 		break;
 	case WM_DISPLAYCHANGE:
 		if (!GUI.FullScreen && !(Settings.ForcedPause & PAUSE_TOGGLE_FULL_SCREEN))
@@ -2637,6 +2904,13 @@ LRESULT CALLBACK WinProc(
 		S9xMouseOn ();
 		GUI.MouseButtons &= ~4;
 		break;
+	case WM_KAILLERA_STATUS:
+	case WM_KAILLERA_CHAT:
+		S9xKailleraHandleUiMessage(uMsg, wParam, lParam);
+		break;
+	case WM_NETPLAY_CHAT:
+		S9xNPHandleUiMessage(uMsg, wParam, lParam);
+		break;
 #ifdef NETPLAY_SUPPORT
 	case WM_USER + 3:
 		NetPlay.Answer = S9xLoadROMImage (_tFromChar((const char *) lParam));
@@ -2757,7 +3031,7 @@ BOOL WinInit( HINSTANCE hInstance)
 #endif
 
     TCHAR buf [100];
-    _stprintf(buf, TEXT("%s %s"), WINDOW_TITLE, TEXT(VERSION));
+    _stprintf(buf, TEXT("%s"), WINDOW_TITLE);
 
     DWORD dwExStyle;
     DWORD dwStyle;
@@ -2910,6 +3184,10 @@ void S9xOnSNESPadRead()
 
 			EnsureInputDisplayUpdated();
 
+#ifdef NETPLAY_SUPPORT
+			UpdateNetplayPauseState ();
+#endif
+
 			// wait until either unpause or next frame advance
 			// note: using GUI.hWnd instead of NULL for PeekMessage/GetMessage breaks some non-modal dialogs
 			MSG msg;
@@ -2928,7 +3206,15 @@ void S9xOnSNESPadRead()
 					TranslateMessage (&msg);
 					DispatchMessage (&msg);
 				}
+
+#ifdef NETPLAY_SUPPORT
+				UpdateNetplayPauseState ();
+#endif
 			}
+
+#ifdef NETPLAY_SUPPORT
+			UpdateNetplayPauseState ();
+#endif
 
 		}
 		else
@@ -3392,6 +3678,7 @@ int WINAPI WinMain(
 	else
 		GUI.hHotkeyTimer = 0;
 
+    GUI.hServerTimer = 0;
     GUI.ServerTimerSemaphore = CreateSemaphore (NULL, 0, 10, NULL);
 
 	if (rom_filename)
@@ -3423,6 +3710,10 @@ int WINAPI WinMain(
     {
 		EnsureInputDisplayUpdated();
 
+#ifdef NETPLAY_SUPPORT
+		UpdateNetplayPauseState ();
+#endif
+
 		// note: using GUI.hWnd instead of NULL for PeekMessage/GetMessage breaks some non-modal dialogs
         while (Settings.StopEmulation || (Settings.Paused && !Settings.FrameAdvance) ||
 			Settings.ForcedPause ||
@@ -3437,8 +3728,16 @@ int WINAPI WinMain(
                 DispatchMessage (&msg);
             }
 
+#ifdef NETPLAY_SUPPORT
+			UpdateNetplayPauseState ();
+#endif
+
 			S9xSetSoundMute(GUI.Mute || Settings.ForcedPause || (Settings.Paused && (!Settings.FrameAdvance || GUI.FAMute)));
         }
+
+#ifdef NETPLAY_SUPPORT
+		UpdateNetplayPauseState ();
+#endif
 
 #ifdef NETPLAY_SUPPORT
         if (!Settings.NetPlay || !NetPlay.PendingWait4Sync ||
@@ -3508,6 +3807,15 @@ int WINAPI WinMain(
 			}
 
 			S9xMainLoop();
+			if (autoMovieAVIRecording && !S9xMoviePlaying())
+			{
+				StopAutoMovieAviRecording();
+				if (GUI.AVIOut)
+				{
+					DoAVIClose(0);
+					ReInitSound();
+				}
+			}
 			GUI.FrameCount++;
 			if (GUI.CursorTimer)
 			{
@@ -3532,17 +3840,23 @@ loop_exit:
 
 	Settings.StopEmulation = TRUE;
 
+	S9xKailleraShutdown();
+
 	// stop sound playback
 	CloseSoundDevice();
 
     if (GUI.hHotkeyTimer)
         timeKillEvent (GUI.hHotkeyTimer);
 
+    if (GUI.hServerTimer)
+        timeKillEvent (GUI.hServerTimer);
+
     timeEndPeriod(wSoundTimerRes);
 
     if (!Settings.StopEmulation)
     {
-        Memory.SaveSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
+        if (!GUI.BlockSRAMSave)
+            Memory.SaveSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
         S9xSaveCheatFile (S9xGetFilename (".cht", CHEAT_DIR).c_str());
     }
     //if (!VOODOO_MODE && !GUI.FullScreen)
@@ -3641,7 +3955,7 @@ void FreezeUnfreezeSlot(int slot, bool8 freeze)
 void FreezeUnfreeze (const char *filename, bool8 freeze)
 {
 #ifdef NETPLAY_SUPPORT
-    if (!freeze && Settings.NetPlay && !Settings.NetPlayServer)
+    if (!freeze && Settings.NetPlay && !S9xNPCanLoadState())
     {
         S9xMessage (S9X_INFO, S9X_NETPLAY_NOT_SERVER,
 			"Only the server is allowed to load freeze files.");
@@ -3671,6 +3985,9 @@ void FreezeUnfreeze (const char *filename, bool8 freeze)
 			return;
 	}
 
+	if (!freeze && !S9xKailleraCanLoadState())
+		return;
+
     S9xSetPause (PAUSE_FREEZE_FILE);
 
     if (freeze)
@@ -3687,13 +4004,16 @@ void FreezeUnfreeze (const char *filename, bool8 freeze)
     else
     {
 
+        S9xKailleraPrepareStateLoad();
+        S9xNPPrepareStateLoad();
         if (S9xUnfreezeGame (filename))
         {
 //	        S9xMessage (S9X_INFO, S9X_FREEZE_FILE_INFO, S9xBasename (filename));
-#ifdef NETPLAY_SUPPORT
-            S9xNPServerQueueSendingFreezeFile (filename);
-#endif
+ #ifdef NETPLAY_SUPPORT
+            S9xNPNotifyStateLoaded(filename);
+ #endif
 //            UpdateBackBuffer();
+            S9xKailleraNotifyStateLoaded(filename);
         }
 
 		// fix next frame advance after loading non-skipping state from a skipping state
@@ -3773,6 +4093,10 @@ static void CheckMenuStates ()
     SetMenuItemInfo(GUI.hMenu, ID_FILE_SAVE_PREVIEW, FALSE, &mii);
     SetMenuItemInfo(GUI.hMenu, ID_FILE_LOAD_PREVIEW, FALSE, &mii);
 
+    mii.fState = !Settings.DontSaveOopsSnapshot ? MFS_CHECKED : MFS_UNCHECKED;
+    SetMenuItemInfo(GUI.hMenu, ID_FILE_SAVE_OOPS, FALSE, &mii);
+
+    mii.fState = MFS_ENABLED;
     SetMenuItemInfo (GUI.hMenu, ID_FILE_RESET, FALSE, &mii);
     SetMenuItemInfo (GUI.hMenu, ID_CHEAT_ENTER, FALSE, &mii);
 	SetMenuItemInfo (GUI.hMenu, IDM_ROM_INFO, FALSE, &mii);
@@ -3805,8 +4129,16 @@ static void CheckMenuStates ()
     SetMenuItemInfo (GUI.hMenu, ID_NETPLAY_ROM, FALSE, &mii);
 #endif
 
+    /* Kaillera: Client button disabled while a session is already active */
+    mii.fState = S9xKailleraIsActive() ? MFS_DISABLED : 0;
+    SetMenuItemInfo (GUI.hMenu, ID_NETPLAY_KAILLERA_CLIENT, FALSE, &mii);
+    mii.fState = 0; /* Options always accessible */
+    SetMenuItemInfo (GUI.hMenu, ID_NETPLAY_KAILLERA_OPTIONS, FALSE, &mii);
+    mii.fState = (S9xKailleraIsActive() || Settings.NetPlay) ? MFS_DISABLED : 0;
+    SetMenuItemInfo (GUI.hMenu, ID_EMULATION_HACKS, FALSE, &mii);
+
     mii.fState = Settings.ApplyCheats ? MFS_CHECKED : MFS_UNCHECKED;
-    if (Settings.StopEmulation)
+    if (Settings.StopEmulation || S9xKailleraIsActive())
         mii.fState |= MFS_DISABLED;
     SetMenuItemInfo( GUI.hMenu, ID_CHEAT_APPLY, FALSE, &mii);
 
@@ -3890,12 +4222,17 @@ static void CheckMenuStates ()
     SetMenuItemInfo (GUI.hMenu, ID_DEBUG_APU_TRACE, FALSE, &mii);
 #endif
 
-	mii.fState = (!Settings.StopEmulation) ? MFS_ENABLED : MFS_DISABLED;
+	mii.fState = (!Settings.StopEmulation && !Settings.NetPlay && !S9xKailleraIsActive()) ? MFS_ENABLED : MFS_DISABLED;
     SetMenuItemInfo (GUI.hMenu, ID_FILE_MOVIE_PLAY, FALSE, &mii);
+
+	mii.fState = (!Settings.StopEmulation && !S9xMovieActive()) ? MFS_ENABLED : MFS_DISABLED;
     SetMenuItemInfo (GUI.hMenu, ID_FILE_MOVIE_RECORD, FALSE, &mii);
 
 	mii.fState = (S9xMovieActive () && !Settings.StopEmulation) ? MFS_ENABLED : MFS_DISABLED;
     SetMenuItemInfo (GUI.hMenu, ID_FILE_MOVIE_STOP, FALSE, &mii);
+
+	mii.fState = GUI.MovieRecordOnLoad ? MFS_CHECKED : MFS_UNCHECKED;
+    SetMenuItemInfo (GUI.hMenu, ID_FILE_MOVIE_ENABLERECORDING, FALSE, &mii);
 
 	mii.fState = (GUI.SoundChannelEnable & (1 << 0)) ? MFS_CHECKED : MFS_UNCHECKED;
     SetMenuItemInfo (GUI.hMenu, ID_CHANNELS_CHANNEL1, FALSE, &mii);
@@ -3925,39 +4262,41 @@ static void CheckMenuStates ()
 	UINT validFlag;
     ControllerOptionsFromControllers();
 
-	validFlag = (((1<<SNES_JOYPAD) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	bool controller_change_locked = (Settings.NetPlay && NetPlay.Connected && NetPlay.Player != 1);
+	bool allow_controller_change = (!S9xMovieActive() || !S9xMovieGetFrameCounter() || Settings.NetPlay || Settings.NetPlayServer) && !controller_change_locked;
+	validFlag = (((1<<SNES_JOYPAD) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_JOYPAD ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_SNES_JOYPAD, FALSE, &mii);
 
-	validFlag = (((1<<SNES_MULTIPLAYER5) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_MULTIPLAYER5) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_MULTIPLAYER5 ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_ENABLE_MULTITAP, FALSE, &mii);
 
-	validFlag = (((1<<SNES_MULTIPLAYER8) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_MULTIPLAYER8) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_MULTIPLAYER8 ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_MULTITAP8, FALSE, &mii);
 
-	validFlag = (((1<<SNES_MOUSE) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_MOUSE) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_MOUSE ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_MOUSE_TOGGLE, FALSE, &mii);
 
-	validFlag = (((1<<SNES_MOUSE_SWAPPED) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_MOUSE_SWAPPED) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_MOUSE_SWAPPED ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_MOUSE_SWAPPED, FALSE, &mii);
 
-	validFlag = (((1<<SNES_SUPERSCOPE) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_SUPERSCOPE) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_SUPERSCOPE ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_SCOPE_TOGGLE, FALSE, &mii);
 
-	validFlag = (((1<<SNES_JUSTIFIER) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_JUSTIFIER) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_JUSTIFIER ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_JUSTIFIER, FALSE, &mii);
 
-	validFlag = (((1<<SNES_JUSTIFIER_2) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_JUSTIFIER_2) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_JUSTIFIER_2 ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_JUSTIFIERS, FALSE, &mii);
 
-	validFlag = (((1<<SNES_MACSRIFLE) & GUI.ValidControllerOptions) && (!S9xMovieActive() || !S9xMovieGetFrameCounter())) ? MFS_ENABLED : MFS_DISABLED;
+	validFlag = (((1<<SNES_MACSRIFLE) & GUI.ValidControllerOptions) && allow_controller_change) ? MFS_ENABLED : MFS_DISABLED;
     mii.fState = validFlag | (GUI.ControllerOption == SNES_MACSRIFLE ? MFS_CHECKED : MFS_UNCHECKED);
     SetMenuItemInfo (GUI.hMenu, IDM_MACSRIFLE_TOGGLE, FALSE, &mii);
 
@@ -3976,6 +4315,87 @@ static void ResetFrameTimer ()
 {
 	// determines if we can do sound sync
 	GUI.AllowSoundSync = Settings.PAL ? Settings.FrameTime == Settings.FrameTimePAL : Settings.FrameTime == Settings.FrameTimeNTSC;
+	#ifdef NETPLAY_SUPPORT
+	ResetServerTimer ();
+	#endif
+}
+
+#ifdef NETPLAY_SUPPORT
+static void ResetServerTimer ()
+{
+	if (GUI.hServerTimer)
+	{
+		timeKillEvent (GUI.hServerTimer);
+		GUI.hServerTimer = 0;
+	}
+
+	while (WaitForSingleObject (GUI.ServerTimerSemaphore, 0) == WAIT_OBJECT_0)
+		;
+
+	if (Settings.NetPlayServer)
+	{
+		UINT timer_period = (Settings.FrameTime + 500) / 1000;
+		if (timer_period == 0)
+			timer_period = 1;
+		GUI.hServerTimer = timeSetEvent (timer_period, 0, (LPTIMECALLBACK)ServerTimer, 0, TIME_PERIODIC);
+	}
+}
+#endif
+
+static std::string MakeAutoMoviePath()
+{
+	TCHAR saved_cwd[MAX_PATH] = {};
+	GetCurrentDirectory(MAX_PATH, saved_cwd);
+	SetCurrentDirectory(S9xGetDirectoryT(DEFAULT_DIR));
+	TCHAR movie_dir_w[MAX_PATH] = {};
+	_tfullpath(movie_dir_w, GUI.MovieDir, MAX_PATH);
+	SetCurrentDirectory(saved_cwd);
+	_tmkdir(movie_dir_w);
+	#ifdef UNICODE
+	std::string movie_dir = (char *)WideToCP(movie_dir_w, CP_ACP);
+	#else
+	std::string movie_dir = movie_dir_w;
+	#endif
+
+	char stem[_MAX_FNAME + 1] = "movie";
+	if (!Memory.ROMFilename.empty())
+		_splitpath(Memory.ROMFilename.c_str(), NULL, NULL, stem, NULL);
+	if (stem[0] == '\0')
+		strcpy(stem, "movie");
+
+	time_t now = time(NULL);
+	tm *lt = localtime(&now);
+	char ts[32] = "00000000000000";
+	if (lt)
+		strftime(ts, sizeof(ts), "%Y%m%d%H%M%S", lt);
+
+	for (int i = 0; i < 1000; i++)
+	{
+		char candidate[MAX_PATH];
+		snprintf(candidate, MAX_PATH, "%s\\%s-%s-%03d.smv",
+				 movie_dir.c_str(), stem, ts, i);
+		if (_access(candidate, 0) != 0)
+			return candidate;
+	}
+
+	char fallback[MAX_PATH];
+	snprintf(fallback, MAX_PATH, "%s\\%s.smv", movie_dir.c_str(), stem);
+	return fallback;
+}
+
+static void StartAutoMovieRecording()
+{
+	WinStartAutoMovieRecordingWithMetadata(0x1F, MOVIE_OPT_FROM_RESET, NULL, 0);
+}
+
+bool WinStartAutoMovieRecordingWithMetadata(uint8 controllers_mask, uint8 opts, const wchar_t *metadata, int metadata_length)
+{
+	std::string path = MakeAutoMoviePath();
+
+	startingMovie = true;
+	int result = S9xMovieCreate(path.c_str(), controllers_mask, opts, metadata, metadata_length);
+	startingMovie = false;
+	return result == SUCCESS;
 }
 
 static bool LoadROMPlain(const TCHAR *filename)
@@ -4007,6 +4427,17 @@ static bool LoadROMMulti(const TCHAR *filename, const TCHAR *filename2)
 }
 
 static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
+	bool autoRecordMovie = GUI.MovieRecordOnLoad && !loadingROMForKaillera;
+
+#ifdef NETPLAY_SUPPORT
+	if (Settings.NetPlay && !Settings.NetPlayServer)
+		autoRecordMovie = false;
+	else if (Settings.NetPlayServer)
+		autoRecordMovie = autoRecordMovie && NPServer.NumClients <= 1;
+#endif
+
+    /* End any active Kaillera session before loading a new ROM */
+    S9xKailleraNotifyBeforeRomLoad();
 
 #ifdef NETPLAY_SUPPORT
 	if (Settings.NetPlay && !Settings.NetPlayServer)
@@ -4018,7 +4449,8 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 #endif
 
 	if (!Settings.StopEmulation) {
-		Memory.SaveSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
+		if (!GUI.BlockSRAMSave)
+			Memory.SaveSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
 		S9xSaveCheatFile (S9xGetFilename (".cht", CHEAT_DIR).c_str());
 	}
 
@@ -4028,6 +4460,13 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		Settings.StopEmulation = !LoadROMPlain(filename);
 
 	if (!Settings.StopEmulation) {
+		/* Loading a ROM offline clears the block so normal play resumes SRAM saving. */
+		if (!loadingROMForKaillera && !S9xKailleraIsActive()
+#ifdef NETPLAY_SUPPORT
+			&& !(Settings.NetPlay && !Settings.NetPlayServer)
+#endif
+			)
+			GUI.BlockSRAMSave = false;
 		bool8 loadedSRAM = Memory.LoadSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
 		if(!loadedSRAM) // help migration from earlier Snes9x versions by checking ROM directory for savestates
 			Memory.LoadSRAM (S9xGetFilename (".srm", ROMFILENAME_DIR).c_str());
@@ -4048,6 +4487,9 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		#endif
             stateMan.init(GUI.rewindBufferSize * 1024 * 1024);
 		}
+
+		if (autoRecordMovie)
+			StartAutoMovieRecording();
 	}
 
 	if(GUI.ControllerOption == SNES_SUPERSCOPE || GUI.ControllerOption == SNES_MACSRIFLE)
@@ -4073,7 +4515,7 @@ bool8 S9xLoadROMImage (const TCHAR *string)
 {
     RestoreGUIDisplay ();
     TCHAR *buf = new TCHAR [200 + lstrlen (string)];
-    _stprintf (buf, TEXT("The NetPlay server is requesting you load the following game:\n '%s'"),
+    _stprintf (buf, TEXT("The Netplay server is requesting you load the following game:\n '%s'"),
 		string);
 
     MessageBox (GUI.hWnd, buf,
@@ -4109,6 +4551,7 @@ void EnableServer (bool8 enable)
         {
             S9xSetPause (PAUSE_NETPLAY_CONNECT);
             Settings.NetPlayServer = S9xNPStartServer (Settings.Port);
+            ResetServerTimer ();
             Sleep (1000);
 
             if (!S9xNPConnectToServer ("127.0.0.1", Settings.Port,
@@ -4120,6 +4563,7 @@ void EnableServer (bool8 enable)
         else
         {
             Settings.NetPlayServer = FALSE;
+            ResetServerTimer ();
             S9xNPStopServer ();
         }
     }
@@ -5292,6 +5736,9 @@ INT_PTR CALLBACK DlgEmulatorProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lPar
             SendDlgItemMessage(hDlg, IDC_REWIND_GRANULARITY_SPIN,UDM_SETPOS,0, GUI.rewindGranularity);
 			SendDlgItemMessage(hDlg, IDC_SFXSPEED_SPIN, UDM_SETRANGE, 0, MAKELPARAM((short)400, (short)50));
 			SendDlgItemMessage(hDlg, IDC_SFXSPEED_SPIN, UDM_SETPOS, 0, Settings.SuperFXClockMultiplier);
+			bool disable_sfx_speed = Settings.NetPlay || S9xKailleraIsActive();
+			EnableWindow(GetDlgItem(hDlg, IDC_SFXSPEED), !disable_sfx_speed);
+			EnableWindow(GetDlgItem(hDlg, IDC_SFXSPEED_SPIN), !disable_sfx_speed);
 			CheckDlgButton(hDlg,IDC_INACTIVE_PAUSE,GUI.InactivePause ? BST_CHECKED : BST_UNCHECKED);
 			CheckDlgButton(hDlg,IDC_CUSTOMROMOPEN,GUI.CustomRomOpen ? BST_CHECKED : BST_UNCHECKED);
 			CheckDlgButton(hDlg, IDC_ADD_REGISTRY, GUI.AddToRegistry ? BST_CHECKED : BST_UNCHECKED);
@@ -7343,6 +7790,7 @@ void MakeExtFile(void)
 INT_PTR CALLBACK DlgNPOptions(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	TCHAR defPort[5];
+	TCHAR username[128];
 	WORD chkLength;
 	if(Settings.Port==0)
 	{
@@ -7359,6 +7807,7 @@ INT_PTR CALLBACK DlgNPOptions(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 		WinRefreshDisplay();
 		SetWindowText(hDlg,NPOPT_TITLE);
 		SetDlgItemText(hDlg,IDC_LABEL_PORTNUM,NPOPT_LABEL_PORTNUM);
+		SetDlgItemText(hDlg,IDC_LABEL_NETPLAY_USERNAME,NPOPT_LABEL_USERNAME);
 		SetDlgItemText(hDlg,IDC_LABEL_PAUSEINTERVAL,NPOPT_LABEL_PAUSEINTERVAL);
 		SetDlgItemText(hDlg,IDC_LABEL_PAUSEINTERVAL_TEXT,NPOPT_LABEL_PAUSEINTERVAL_TEXT);
 		SetDlgItemText(hDlg,IDC_LABEL_MAXSKIP,NPOPT_LABEL_MAXSKIP);
@@ -7372,6 +7821,7 @@ INT_PTR CALLBACK DlgNPOptions(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 		SetDlgItemText(hDlg,IDCANCEL,BUTTON_CANCEL);
 
 		SendDlgItemMessage(hDlg, IDC_PORTNUMBERA, WM_SETTEXT, 0, (LPARAM)defPort);
+		SetDlgItemText(hDlg, IDC_NETPLAY_USERNAME, (TCHAR *) _tFromChar(Settings.NetplayUsername));
 		if(Settings.NetPlayServer)
 		{
 			SendDlgItemMessage(hDlg, IDC_ACTASSERVER, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
@@ -7417,6 +7867,14 @@ INT_PTR CALLBACK DlgNPOptions(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 				else
 				{
 					Settings.Port = _ttoi(defPort);
+				}
+				GetDlgItemText(hDlg, IDC_NETPLAY_USERNAME, username, COUNT(username));
+				strncpy(Settings.NetplayUsername, _tToChar(username), sizeof(Settings.NetplayUsername) - 1);
+				Settings.NetplayUsername[sizeof(Settings.NetplayUsername) - 1] = '\0';
+				if (Settings.NetplayUsername[0] == '\0')
+				{
+					strncpy(Settings.NetplayUsername, "Player", sizeof(Settings.NetplayUsername) - 1);
+					Settings.NetplayUsername[sizeof(Settings.NetplayUsername) - 1] = '\0';
 				}
 				//MessageBox(hDlg,defPort,defPort,MB_OK);
 				Settings.NetPlayServer = IsDlgButtonChecked(hDlg,IDC_ACTASSERVER);
@@ -8426,10 +8884,10 @@ static hotkey_dialog_item hotkey_dialog_items[MAX_SWITCHABLE_HOTKEY_DIALOG_PAGES
     },
     {
         { &CustomKeys.AspectRatio, HOTKEYS_SWITCH_ASPECT_RATIO },
+        { &CustomKeys.KailleraChat, HOTKEYS_KAILLERA_CHAT },
         { &CustomKeys.CheatEditorDialog, HOTKEYS_CHEAT_EDITOR_DIALOG },
         { &CustomKeys.CheatSearchDialog, HOTKEYS_CHEAT_SEARCH_DIALOG },
-        { NULL, _T("") },
-        { NULL, _T("") },
+        { &CustomKeys.SaveROM, HOTKEYS_SAVE_ROM },
         { NULL, _T("") },
         { NULL, _T("") },
         { NULL, _T("") },
@@ -10625,6 +11083,7 @@ INT_PTR CALLBACK DlgOpenMovie(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 
 			SendDlgItemMessage(hDlg,IDC_READONLY,BM_SETCHECK,GUI.MovieReadOnly ? BST_CHECKED : BST_UNCHECKED,0);
+			SendDlgItemMessage(hDlg,IDC_RECORD_AVI,BM_SETCHECK,BST_UNCHECKED,0);
 
 			SetDlgItemText(hDlg,IDC_LABEL_STARTSETTINGS, MOVIE_LABEL_STARTSETTINGS);
 			SetDlgItemText(hDlg,IDC_LABEL_CONTROLLERSETTINGS, MOVIE_LABEL_CONTSETTINGS);
@@ -10686,6 +11145,7 @@ INT_PTR CALLBACK DlgOpenMovie(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 					}
 					else
 						GUI.MovieReadOnly=FALSE;
+					op->RecordAVI = (BST_CHECKED == SendDlgItemMessage(hDlg, IDC_RECORD_AVI, BM_GETCHECK, 0, 0));
 					if(BST_CHECKED==SendDlgItemMessage(hDlg, IDC_DISPLAY_INPUT, BM_GETCHECK,0,0))
 						op->DisplayInput=TRUE;
 					GetDlgItemText(hDlg, IDC_MOVIE_PATH, op->Path, MAX_PATH);
@@ -10731,7 +11191,8 @@ INT_PTR CALLBACK DlgCreateMovie(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lPara
 
 			// have to save here or the SRAM file might not exist when we check for it
 			// (which would cause clear SRAM option to not work)
-			Memory.SaveSRAM(S9xGetFilename (".srm", SRAM_DIR).c_str());
+			if (!GUI.BlockSRAMSave)
+				Memory.SaveSRAM(S9xGetFilename (".srm", SRAM_DIR).c_str());
 
 
 			op=(OpenMovieParams*)lParam;
@@ -10762,10 +11223,24 @@ INT_PTR CALLBACK DlgCreateMovie(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lPara
 
 			SendDlgItemMessage(hDlg,IDC_RECORD_RESET,BM_SETCHECK, (WPARAM)(GUI.MovieStartFromReset ? BST_CHECKED : BST_UNCHECKED), 0);
 			SendDlgItemMessage(hDlg,IDC_RECORD_NOW,BM_SETCHECK, (WPARAM)(GUI.MovieStartFromReset ? BST_UNCHECKED : BST_CHECKED), 0);
+			
+			// Disable Start from Reset option during netplay or kaillera sessions
+			bool disableResetOption = Settings.NetPlay || S9xKailleraIsActive();
+			EnableWindow(GetDlgItem(hDlg, IDC_RECORD_RESET), !disableResetOption);
+			if (disableResetOption) {
+				SendDlgItemMessage(hDlg,IDC_RECORD_RESET,BM_SETCHECK, BST_UNCHECKED, 0);
+				SendDlgItemMessage(hDlg,IDC_RECORD_NOW,BM_SETCHECK, BST_CHECKED, 0);
+			}
 			if(existsSRAM())
 			{
-				EnableWindow(GetDlgItem(hDlg, IDC_CLEARSRAM), GUI.MovieStartFromReset);
-				SendDlgItemMessage(hDlg,IDC_CLEARSRAM,BM_SETCHECK, (WPARAM)(GUI.MovieClearSRAM ? BST_CHECKED : BST_UNCHECKED), 0);
+				// Disable Clear SRAM option during netplay or kaillera sessions
+				bool disableClearSRAM = Settings.NetPlay || S9xKailleraIsActive();
+				EnableWindow(GetDlgItem(hDlg, IDC_CLEARSRAM), GUI.MovieStartFromReset && !disableClearSRAM);
+				if (disableClearSRAM) {
+					SendDlgItemMessage(hDlg,IDC_CLEARSRAM,BM_SETCHECK, BST_UNCHECKED, 0);
+				} else {
+					SendDlgItemMessage(hDlg,IDC_CLEARSRAM,BM_SETCHECK, (WPARAM)(GUI.MovieClearSRAM ? BST_CHECKED : BST_UNCHECKED), 0);
+				}
 			}
 			else
 			{
@@ -11129,4 +11604,133 @@ void S9xPostRomInit()
 	// black out the screen
  	for (uint32 y = 0; y < (uint32)IPPU.RenderedScreenHeight; y++)
 		memset(GFX.Screen + y * GFX.RealPPL, 0, GFX.RealPPL*2);
+}
+
+void WinSaveROM()
+{
+    if (!Memory.ROM || Memory.CalculatedSize == 0)
+    {
+        S9xMessage(S9X_ERROR, S9X_ROM_INFO, "No ROM loaded to save.");
+        return;
+    }
+
+    OPENFILENAME ofn;
+    TCHAR szFileName[MAX_PATH];
+    TCHAR szPathName[MAX_PATH];
+
+    // Create default filename: (ROMFilename).zip
+    std::string defaultName = Memory.ROMFilename;
+    size_t lastDot = defaultName.find_last_of('.');
+    if (lastDot != std::string::npos)
+    {
+        defaultName = defaultName.substr(0, lastDot);
+    }
+    defaultName += ".zip";
+
+    _stprintf(szFileName, _T("%s"), (TCHAR *)_tFromChar(defaultName.c_str()));
+    _tfullpath(szPathName, S9xGetDirectoryT(ROM_DIR), MAX_PATH);
+
+    memset((LPVOID)&ofn, 0, sizeof(OPENFILENAME));
+    ofn.lStructSize = sizeof(OPENFILENAME);
+    ofn.hwndOwner = GUI.hWnd;
+    ofn.lpstrFilter = _T("ZIP Archive (*.zip)\0*.zip\0SNES ROM (*.smc;*.sfc;*.fig)\0*.smc;*.sfc;*.fig\0All Files (*.*)\0*.*\0\0");
+    ofn.lpstrFile = szFileName;
+    ofn.lpstrDefExt = _T("zip");
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
+    ofn.lpstrInitialDir = szPathName;
+
+    if (GetSaveFileName(&ofn))
+    {
+        // Check if user selected .zip extension
+        int fileNameLen = _tcslen(szFileName);
+        bool isZip = false;
+        if (fileNameLen > 4)
+        {
+            TCHAR ext[5];
+            _tcsncpy(ext, szFileName + fileNameLen - 4, 5);
+            ext[4] = _T('\0');
+            if (_tcsicmp(ext, _T(".zip")) == 0)
+                isZip = true;
+        }
+
+        if (isZip)
+        {
+            // Save as ZIP with max compression
+            zipFile zf = zipOpen(_tToChar(szFileName), APPEND_STATUS_CREATE);
+            if (zf == NULL)
+            {
+                S9xMessage(S9X_ERROR, S9X_ROM_INFO, "Failed to create ZIP file.");
+                return;
+            }
+
+            // Get the original ROM filename for internal zip name
+            std::string internalName = Memory.ROMFilename;
+            size_t lastSlash = internalName.find_last_of("/\\");
+            if (lastSlash != std::string::npos)
+            {
+                internalName = internalName.substr(lastSlash + 1);
+            }
+
+            // Write ROM data to zip with max compression
+            int err = zipOpenNewFileInZip(zf,
+                                          internalName.c_str(),
+                                          NULL,  // zip_fileinfo
+                                          NULL,  // extrafield_local
+                                          0,     // size_extrafield_local
+                                          NULL,  // extrafield_global
+                                          0,     // size_extrafield_global
+                                          NULL,  // comment
+                                          Z_DEFLATED,
+                                          Z_BEST_COMPRESSION);
+
+            if (err != ZIP_OK)
+            {
+                zipClose(zf, NULL);
+                S9xMessage(S9X_ERROR, S9X_ROM_INFO, "Failed to add file to ZIP archive.");
+                return;
+            }
+
+            err = zipWriteInFileInZip(zf, Memory.ROM, Memory.CalculatedSize);
+            if (err != ZIP_OK)
+            {
+                zipCloseFileInZip(zf);
+                zipClose(zf, NULL);
+                S9xMessage(S9X_ERROR, S9X_ROM_INFO, "Failed to write ROM data to ZIP archive.");
+                return;
+            }
+
+            zipCloseFileInZip(zf);
+            zipClose(zf, NULL);
+
+            char msg[512];
+            sprintf(msg, "ROM saved to ZIP: %s", (char *)_tToChar(szFileName));
+            S9xMessage(S9X_INFO, S9X_ROM_INFO, msg);
+        }
+        else
+        {
+            // Save as raw ROM file
+            FILE* file = _tfopen(szFileName, _T("wb"));
+            if (file)
+            {
+                size_t written = fwrite(Memory.ROM, 1, Memory.CalculatedSize, file);
+                fclose(file);
+
+                if (written == Memory.CalculatedSize)
+                {
+                    char msg[512];
+                    sprintf(msg, "ROM saved: %s", (char *)_tToChar(szFileName));
+                    S9xMessage(S9X_INFO, S9X_ROM_INFO, msg);
+                }
+                else
+                {
+                    S9xMessage(S9X_ERROR, S9X_ROM_INFO, "Failed to write complete ROM data.");
+                }
+            }
+            else
+            {
+                S9xMessage(S9X_ERROR, S9X_ROM_INFO, "Failed to create ROM file.");
+            }
+        }
+    }
 }

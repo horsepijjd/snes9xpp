@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include "snes9x.h"
+#include "ppu.h"
 #include "memmap.h"
 #include "dma.h"
 #include "apu/apu.h"

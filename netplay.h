@@ -26,9 +26,10 @@
 #define NP_DEBUG 1
 #endif
 
-#define NP_VERSION 10
+#define NP_VERSION 65
 #define NP_JOYPAD_HIST_SIZE 120
 #define NP_DEFAULT_PORT 6096
+#define NP_MAX_CHAT_MESSAGE_LEN 240
 
 #define NP_MAX_CLIENTS 8
 
@@ -47,6 +48,8 @@
 #define NP_CLNT_LOADED_ROM 9
 #define NP_CLNT_RECEIVED_ROM_IMAGE 10
 #define NP_CLNT_WAITING_FOR_ROM_IMAGE 11
+#define NP_CLNT_CHAT 12
+#define NP_CLNT_CONTROLLER_TYPE 13
 
 #define NP_SERV_HELLO 0
 #define NP_SERV_JOYPAD 1
@@ -59,6 +62,10 @@
 #define NP_SERV_READY 8
 // ...
 #define NP_SERV_JOYPAD_SWAP 12
+#define NP_SERV_PLAYER_INFO 13
+#define NP_SERV_CHAT 14
+#define NP_SERV_CONTROLLER_TYPE 15
+#define NP_SERV_HACK_SETTINGS 16
 
 struct SNPClient
 {
@@ -141,6 +148,7 @@ struct SNetPlay
     uint32 FrameCount;
     uint32 MaxFrameSkip;
     uint32 MaxBehindFrameCount;
+    char   ClientNames [NP_MAX_CLIENTS][128];
     bool8 JoypadsReady [NP_JOYPAD_HIST_SIZE][NP_MAX_CLIENTS];
     char   ActionMsg [NP_MAX_ACTION_LEN];
     char   ErrorMsg [NP_MAX_ACTION_LEN];
@@ -186,6 +194,8 @@ void S9xNPStepJoypadHistory ();
 void S9xNPResetJoypadReadPos ();
 bool8 S9xNPSendReady (uint8 op = NP_CLNT_READY);
 bool8 S9xNPSendPause (bool8 pause);
+bool8 S9xNPSendChat (const char *message);
+bool8 S9xNPSendControllerType (int port, uint8 controller_type);
 void S9xNPReset ();
 void S9xNPSetAction (const char *action, bool8 force = FALSE);
 void S9xNPSetError (const char *error);
@@ -195,12 +205,26 @@ void S9xNPServerQueueSendingFreezeFile (const char *filename);
 void S9xNPServerQueueSyncAll ();
 void S9xNPServerQueueSendingROMImage ();
 void S9xNPServerQueueSendingLoadROMRequest (const char *filename);
+void S9xNPServerSendChat(const char *message);
+void S9xNPDisplayChatMessage(const char *text);
+
+bool8 S9xNPCanLoadState(void);
+void S9xNPPrepareStateLoad(void);
+void S9xNPNotifyStateLoaded(const char *filename);
 
 void S9xNPServerAddTask (uint32 task, void *data);
 
 bool8 S9xNPStartServer (int port);
 void S9xNPStopServer ();
 void S9xNPSendJoypadSwap ();
+#ifdef __WIN32__
+#define WM_NETPLAY_CHAT (WM_USER + 12)
+#define WM_NETPLAY_STOP_MOVIE (WM_USER + 13)
+LRESULT S9xNPHandleUiMessage(UINT msg, WPARAM wParam, LPARAM lParam);
+bool S9xNPChatOpen(bool swallow_char);
+bool S9xNPChatWantsKeyboardCapture(void);
+bool S9xNPChatHandleKeyboardMessage(UINT msg, WPARAM wParam, LPARAM lParam);
+#endif
 #ifdef __WIN32__
 #define S9xGetMilliTime timeGetTime
 #else

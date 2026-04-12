@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 
 #include "snes9x.h"
+#include "ppu.h"
 #include "memmap.h"
 #include "apu/apu.h"
 #include "fxemu.h"
@@ -37,6 +38,9 @@
 #include "display.h"
 #include "sha256.h"
 #include "snapshot.h"
+#ifdef NETPLAY_SUPPORT
+#include "../win32/kaillera.h"
+#endif
 
 #ifndef SET_UI_COLOR
 #define SET_UI_COLOR(r, g, b) ;
@@ -3384,16 +3388,21 @@ std::string CMemory::GetMultilineROMInfo()
     std::string utf8_romname = Memory.ROMName;
     std::string tvstandard = Settings.PAL ? "PAL" : "NTSC";
 	std::string romid = Memory.ROMId;
-    std::string checksum = isChecksumOK              ? "Checksum OK"
+    std::string checksum = isChecksumOK              ? "checksum ok"
                            : Settings.IsPatched == 3 ? "UPS patched"
                            : Settings.IsPatched == 2 ? "BPS patched"
                            : Settings.IsPatched == 1 ? "IPS patched"
-                                                     : "Invalid Checksum";
+                           : ((Multi.cartType == 4) ? "no checksum"
+                                                     : "bad checksum");
 
     std::stringstream ss;
-    ss << "\"" << utf8_romname << "\" (" + tvstandard + ") version " << Memory.Revision() << "\n";
-    ss << Memory.KartContents() << ": " << Memory.MapType() << ": " << Memory.Size() << ", SRAM: " << Memory.StaticRAMSize() << "\n";
-    ss << "ID: " << romid << ", CRC32: " << std::setfill('0') << std::setw(8) << std::setbase(16) << Memory.ROMCRC32 << ", " << checksum;
+    ss << "\"" << utf8_romname << "\" [" << checksum << "], "
+       << Memory.MapType() << ", " << Memory.Size() << ", "
+       << Memory.KartContents() << ", " << tvstandard << ", "
+       << "SRAM:" << Memory.StaticRAMSize() << ", "
+       << "ID:" << romid << ", "
+       << "CRC32:" << std::setfill('0') << std::setw(8) << std::uppercase << std::hex << Memory.ROMCRC32
+       << ", v" << Memory.Revision();
 
 	return ss.str();
 }
@@ -3896,6 +3905,12 @@ void CMemory::CheckForAnyPatch(const char *rom_filename, bool8 header, int32 &ro
 
     if (Settings.NoPatch)
         return;
+
+#ifdef NETPLAY_SUPPORT
+    // Disable patch loading during Kaillera sessions to prevent desynchronization
+    if (S9xKailleraIsActive())
+        return;
+#endif
 
     FSTREAM patch_file = NULL;
     long offset = header ? 512 : 0;

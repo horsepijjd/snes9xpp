@@ -18,6 +18,7 @@
 #include "../snes9x.h"
 #include "wsnes9x.h"
 #include "wlanguage.h"
+#include "kaillera.h"
 #include "../display.h"
 #include "../conffile.h"
 #include "../spc7110.h"
@@ -111,16 +112,24 @@ void WinSetDefaultValues ()
 
 #ifdef NETPLAY_SUPPORT
 	Settings.Port =	1996;
+	Settings.NetplayUsername[0] = '\0';
 	NetPlay.MaxFrameSkip = 10;
 	NetPlay.MaxBehindFrameCount	= 10;
 	NPServer.SyncByReset = true;
 	NPServer.SendROMImageOnConnect = false;
 #endif
 
+	KailleraConfig.TransferSRAM      = TRUE;
+	KailleraConfig.ShowChatInOSD     = TRUE;
+	KailleraConfig.AutoRecordMovie   = FALSE;
+	KailleraConfig.AutoStopMovieOnEnd = FALSE;
+	KailleraConfig.NeverBlockSRAMSave = FALSE;
+
 	Settings.TakeScreenshot=false;
 
 	GUI.Language=0;
     GUI.AllowSoundSync = true;
+	GUI.MovieRecordOnLoad = false;
 	GUI.CurrentSaveBank = 0;
 }
 
@@ -828,6 +837,7 @@ void WinRegisterConfigItems()
 	AddBool("MovieDefaultClearSRAM", GUI.MovieClearSRAM, false);
 	AddBool("MovieDefaultStartFromReset", GUI.MovieStartFromReset, false);
 	AddBool("MovieDefaultReadOnly", GUI.MovieReadOnly, true);
+	AddBool("MovieRecordOnLoad", GUI.MovieRecordOnLoad, false);
 	AddUInt("CurrentSaveSlot", GUI.CurrentSaveSlot, 0);
 	AddUIntC("MaxRecentGames", GUI.MaxRecentGames, 14, "max recent games to show in the recent games menu (must be <= 32)");
 #undef CATEGORY
@@ -882,7 +892,8 @@ void WinRegisterConfigItems()
 #ifdef NETPLAY_SUPPORT
 #define	CATEGORY "Netplay"
 	AddUInt("Port", Settings.Port, NP_DEFAULT_PORT);
-	AddString("Server", Settings.ServerName, 128, Settings.ServerName);
+	AddString("Server", Settings.ServerName, 128, "");
+	AddString("Username", Settings.NetplayUsername, 128, "");
 	AddBool2("SyncByReset", NPServer.SyncByReset, true);
 	AddBool2("SendROMImageOnConnect", NPServer.SendROMImageOnConnect, false);
 	AddUInt("MaxFrameSkip", NetPlay.MaxFrameSkip, 10);
@@ -895,6 +906,18 @@ void WinRegisterConfigItems()
 	#undef ADD
 #undef CATEGORY
 #endif
+#define CATEGORY "Netplay\\Kaillera"
+	AddBool2C("TransferSRAM",      KailleraConfig.TransferSRAM,      TRUE,
+	          "Send SRAM to peers at session start (player 1 only)");
+	AddBool2C("ShowChatInOSD",     KailleraConfig.ShowChatInOSD,     TRUE,
+	          "Display incoming Kaillera chat messages in the OSD");
+	AddBool2C("AutoRecordMovie",   KailleraConfig.AutoRecordMovie,   FALSE,
+	          "Automatically record an SMV movie file during Kaillera games");
+	AddBool2C("AutoStopMovieOnEnd", KailleraConfig.AutoStopMovieOnEnd, FALSE,
+	          "Stop SMV recording when the Kaillera session ends");
+	AddBool2C("NeverBlockSRAMSave", KailleraConfig.NeverBlockSRAMSave, FALSE,
+	          "Always allow saving SRAM to disk, even after netplay/Kaillera sessions or movie playback");
+#undef CATEGORY
 #define	CATEGORY "Controls\\Win"
 #define ADD(n,x) AddVKey("Joypad" #n ":" #x, Joypad[n-1].x, Joypad[n-1].x)
 #define ADDN(n,x,n2) AddVKey("Joypad" #n ":" #n2, Joypad[n-1].x, Joypad[n-1].x)
@@ -940,6 +963,7 @@ void WinRegisterConfigItems()
 	ADD(Mute);
 	ADD(ToggleBackdrop);
     ADD(AspectRatio);
+    ADD(KailleraChat);
     ADD(CheatEditorDialog);
     ADD(CheatSearchDialog);
 #undef ADD

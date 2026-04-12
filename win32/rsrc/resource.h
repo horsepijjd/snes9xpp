@@ -360,6 +360,7 @@
 #define IDC_REDUCEINPUTLAG              1258
 #define IDC_INTEGERSCALING              1259
 #define IDC_NTSCSCANLINES               1260
+#define IDC_RECORD_AVI                  1261
 #define IDC_HOTKEY1                     2000
 #define IDC_HOTKEY2                     2001
 #define IDC_HOTKEY3                     2002
@@ -484,8 +485,8 @@
 #define ID_FILE_MOVIE_STOP              40114
 #define ID_FILE_MOVIE_RECORD            40115
 #define ID_FILE_MOVIE_ENABLERECORDING   40116
-#define ID_FILE_WRITE_AVI               40116
-#define ID_FILE_STOP_AVI                40117
+#define ID_FILE_WRITE_AVI               40191
+#define ID_FILE_STOP_AVI                40192
 #define ID_OPTIONS_KEYCUSTOM            40118
 #define ID_WINDOW_                      40119
 #define ID_WINDOW_BILINEAR              40122
@@ -551,18 +552,32 @@
 #define ID_FILE_LOAD0                   44200
 #define ID_FILE_LOAD_LAST               44300
 #define ID_FILE_SAVE_FILE               44310
+#define ID_FILE_SAVE_OOPS               44320
 #define ID_FILE_LOAD_OOPS               44330
 #define ID_FILE_LOAD_FILE               44331
 #define IDM_MACSRIFLE_TOGGLE            44332
 #define IDC_STATIC                      -1
 
+// Kaillera
+#define IDD_KAILLERA_OPTIONS            169
+#define IDC_KAILLERA_TRANSFER_SRAM      3044
+#define IDC_KAILLERA_ALLOW_ALL_STATE_LOADS 3045
+#define IDC_KAILLERA_CHAT_OSD           3046
+#define IDC_KAILLERA_AUTO_MOVIE         3047
+#define IDC_KAILLERA_STOP_MOVIE         3048
+#define IDC_KAILLERA_NEVER_BLOCK_SRAM   3051
+#define IDC_LABEL_NETPLAY_USERNAME      3049
+#define IDC_NETPLAY_USERNAME            3050
+#define ID_NETPLAY_KAILLERA_CLIENT      40189
+#define ID_NETPLAY_KAILLERA_OPTIONS     40190
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        169
-#define _APS_NEXT_COMMAND_VALUE         40189
-#define _APS_NEXT_CONTROL_VALUE         3044
+#define _APS_NEXT_RESOURCE_VALUE        170
+#define _APS_NEXT_COMMAND_VALUE         40193
+#define _APS_NEXT_CONTROL_VALUE         3051
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

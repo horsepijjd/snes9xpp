@@ -315,6 +315,10 @@ void S9xLoadConfigFiles (char **argv, int argc)
 	Settings.ServerName[0] = '\0';
 	if (conf.Exists("Netplay::Server"))
 		conf.GetString("Netplay::Server", Settings.ServerName, 128);
+	strncpy(Settings.NetplayUsername, "Player", sizeof(Settings.NetplayUsername) - 1);
+	Settings.NetplayUsername[sizeof(Settings.NetplayUsername) - 1] = '\0';
+	if (conf.Exists("Netplay::Username"))
+		conf.GetString("Netplay::Username", Settings.NetplayUsername, 128);
 #endif
 
 	// Debug

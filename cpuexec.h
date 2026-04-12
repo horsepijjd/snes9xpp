@@ -7,7 +7,11 @@
 #ifndef _CPUEXEC_H_
 #define _CPUEXEC_H_
 
-#include "ppu.h"
+// NOTE: `cpuexec.h` is included from many core/Win32 translation units.
+// Including `ppu.h` here creates a circular include chain (via `memmap.h` ->
+// `getset.h`) that can prevent the declarations below from being visible in
+// some TUs. We only need CPU core flags/registers here, which live in `65c816.h`.
+#include "65c816.h"
 #ifdef DEBUGGER
 #include "debug.h"
 #endif

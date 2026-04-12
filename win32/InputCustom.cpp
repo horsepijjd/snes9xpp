@@ -517,8 +517,12 @@ int GetNumHotKeysAssignedTo (WORD Key, int modifiers)
         if(MATCHES_KEY(Rewind))            count++;
         if(MATCHES_KEY(SaveFileSelect))    count++;
         if(MATCHES_KEY(LoadFileSelect))    count++;
-        if(MATCHES_KEY(Mute))              count++;
+		if(MATCHES_KEY(Mute))              count++;
 		if(MATCHES_KEY(ToggleBackdrop))    count++;
+		if(MATCHES_KEY(AspectRatio))       count++;
+		if(MATCHES_KEY(KailleraChat))      count++;
+		if(MATCHES_KEY(CheatEditorDialog)) count++;
+		if(MATCHES_KEY(CheatSearchDialog)) count++;
 
 		#undef MATCHES_KEY
 	}

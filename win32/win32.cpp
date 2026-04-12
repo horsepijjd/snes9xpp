@@ -15,6 +15,7 @@
 #include "../gfx.h"
 #include "../movie.h"
 #include "../netplay.h"
+#include "kaillera.h"
 
 #include "wsnes9x.h"
 #include "win32_sound.h"
@@ -299,6 +300,14 @@ extern unsigned long START;
 
 void S9xSyncSpeed( void)
 {
+    /* Kaillera: kailleraModifyPlayValues() provides frame synchronisation;
+     * skip the normal speed-control logic entirely while active.           */
+    if (S9xKailleraIsActive())
+    {
+        IPPU.RenderThisFrame = TRUE;
+        IPPU.SkippedFrames   = 0;
+        return;
+    }
 #ifdef NETPLAY_SUPPORT
     if (Settings.NetPlay)
     {
@@ -489,6 +498,9 @@ bool S9xGetState (WORD KeyIdent)
 		return true;
 
 	if(!GUI.BackgroundInput && GUI.hWnd != GetForegroundWindow())
+		return true;
+
+	if (!(KeyIdent & 0x8000) && (S9xKailleraWantsKeyboardCapture() || S9xNPChatWantsKeyboardCapture()))
 		return true;
 
     if (KeyIdent & 0x8000) // if it's a joystick 'key':
@@ -909,6 +921,7 @@ void DeinitS9x()
 
 void S9xAutoSaveSRAM ()
 {
+    if (GUI.BlockSRAMSave) return;
     Memory.SaveSRAM (S9xGetFilename (".srm", SRAM_DIR).c_str());
 }
 

@@ -17,6 +17,13 @@
 #include "bsx.h"
 #include "msu1.h"
 
+// `getset.h` is pulled in at the end of `memmap.h`. To avoid heavy include
+// dependencies/cycles, declare the small CPU/PPU accessors we use here.
+void  S9xSetPPU (uint8, uint16);
+uint8 S9xGetPPU (uint16);
+void  S9xSetCPU (uint8, uint16);
+uint8 S9xGetCPU (uint16);
+
 #define addCyclesInMemoryAccess \
 	if (!CPU.InDMAorHDMA) \
 	{ \

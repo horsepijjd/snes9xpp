@@ -285,6 +285,7 @@ struct SSettings
 	bool8	NetPlay;
 	bool8	NetPlayServer;
 	char	ServerName[128];
+	char	NetplayUsername[128];
 	int		Port;
 
 	bool8	MovieTruncate;
@@ -344,5 +345,7 @@ extern struct SCPUState			CPU;
 extern struct STimings			Timings;
 extern struct SSNESGameFixes	SNESGameFixes;
 extern char						String[513];
+
+#include "ppu.h"
 
 #endif

@@ -12,6 +12,7 @@
 #endif
 #include "snes9x.h"
 #include "memmap.h"
+#include "gfx.h"
 #include "controls.h"
 #include "snapshot.h"
 #include "movie.h"
@@ -624,6 +625,21 @@ int S9xMovieOpen (const char *filename, bool8 read_only)
 
 	lseek(fn, Movie.SaveStateOffset, SEEK_SET);
 
+	if (Movie.Opts & MOVIE_OPT_NOSAVEDATA)
+	{
+		if (Movie.Opts & MOVIE_OPT_FROM_RESET)
+		{
+			S9xReset();
+			reset_controllers();
+			result = SUCCESS;
+		}
+		else
+			result = WRONG_FORMAT;
+
+		fclose(fd);
+	}
+	else
+	{
     // reopen stream to access as gzipped data
     stream = REOPEN_STREAM(fn, "rb");
 	if (!stream)
@@ -643,6 +659,7 @@ int S9xMovieOpen (const char *filename, bool8 read_only)
     //  the underlying file will be closed by zlib, causing problems when msvcrt tries to do it)
     delete stream;
     fclose(fd);
+	}
 
 	if (result != SUCCESS)
 		return (result);
@@ -740,25 +757,39 @@ int S9xMovieCreate (const char *filename, uint8 controllers_mask, uint8 opts, co
 	}
 
 	Movie.ROMCRC32 = Memory.ROMCRC32;
+	strncpy(Movie.ROMName, Memory.ROMName, 23);
 
 	write_movie_extrarominfo(fd, &Movie);
 
 	fclose(fd);
 
-	stream = OPEN_STREAM(filename, "ab");
-	if (!stream)
-		return (FILE_NOT_FOUND);
-
-	if (opts & MOVIE_OPT_FROM_RESET)
+	if (opts & MOVIE_OPT_NOSAVEDATA)
 	{
-		S9xReset();
-		reset_controllers();
-		WRITE_STREAM(Memory.SRAM, 0x20000, stream);
+		if (opts & MOVIE_OPT_FROM_RESET)
+		{
+			S9xReset();
+			reset_controllers();
+		}
+		else
+			return (WRONG_FORMAT);
 	}
 	else
-		S9xFreezeToStream(stream);
+	{
+		stream = OPEN_STREAM(filename, "ab");
+		if (!stream)
+			return (FILE_NOT_FOUND);
 
-	CLOSE_STREAM(stream);
+		if (opts & MOVIE_OPT_FROM_RESET)
+		{
+			S9xReset();
+			reset_controllers();
+			WRITE_STREAM(Memory.SRAM, 0x20000, stream);
+		}
+		else
+			S9xFreezeToStream(stream);
+
+		CLOSE_STREAM(stream);
+	}
 
 	if (!(fd = fopen(filename, "rb+")))
 		return (FILE_NOT_FOUND);

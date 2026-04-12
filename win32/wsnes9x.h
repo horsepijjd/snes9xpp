@@ -149,6 +149,7 @@ struct sGUI {
     HMENU hMenu;
     HINSTANCE hInstance;
 
+    DWORD hServerTimer;
     DWORD hHotkeyTimer;
     HANDLE ClientSemaphore;
     HANDLE ServerTimerSemaphore;
@@ -226,6 +227,7 @@ struct sGUI {
 	bool MovieClearSRAM;
 	bool MovieStartFromReset;
 	bool MovieReadOnly;
+	bool MovieRecordOnLoad;
 	bool NetplayUseJoypad1;
     unsigned int FlipCounter;
     unsigned int NumFlipFrames;
@@ -274,6 +276,7 @@ struct sGUI {
     unsigned int rewindGranularity;
 
 	bool AddToRegistry;
+    bool BlockSRAMSave;     /* true: suppress all SRAM writes to disk until next offline ROM load */
 };
 
 //TURBO masks
@@ -352,8 +355,10 @@ struct SCustomKeys {
     SCustomKey LoadFileSelect;
     SCustomKey Mute;
     SCustomKey AspectRatio;
+    SCustomKey KailleraChat;
     SCustomKey CheatEditorDialog;
     SCustomKey CheatSearchDialog;
+    SCustomKey SaveROM;
 };
 
 struct SJoypad {
@@ -442,6 +447,8 @@ extern struct SJoypad ToggleJoypadStorage[8];
 extern struct SJoypad TurboToggleJoypadStorage[8];
 extern struct SCustomKeys CustomKeys;
 
+bool WinStartAutoMovieRecordingWithMetadata(uint8 controllers_mask, uint8 opts, const wchar_t *metadata, int metadata_length);
+
 enum
 {
     WIN_SNES9X_DIRECT_SOUND_DRIVER=0,
@@ -480,5 +487,7 @@ void FreezeUnfreezeDialogPreview(bool8 freeze);
 void FreezeUnfreeze(const char *filename, bool8 freeze);
 bool UnfreezeScreenshotSlot(int slot, uint16 **image_buffer, int &width, int &height);
 void S9xWinRemoveRegistryKeys();
+void WinApplyControllerType(int port, uint8 type);
+void WinSaveROM();
 
 #endif // !defined(SNES9X_H_INCLUDED)

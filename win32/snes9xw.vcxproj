@@ -78,13 +78,13 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)</OutDir>
     <IntDir>$(SolutionDir)_Intermediate\$(ProjectName)\$(Configuration)\$(PlatformTarget)\</IntDir>
-    <TargetName>$(ProjectName)-debug</TargetName>
+    <TargetName>$(ProjectName)pp-debug</TargetName>
     <IncludePath>$(DXSDK_DIR)include;$(CG_INC_PATH);$(IncludePath)</IncludePath>
     <LibraryPath>$(DXSDK_DIR)Lib\$(PlatformTarget);$(CG_LIB_PATH);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug Unicode|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <TargetName>$(ProjectName)-debug-x64</TargetName>
+    <TargetName>$(ProjectName)pp-debug-x64</TargetName>
     <IncludePath>$(DXSDK_DIR)include;$(CG_INC_PATH);$(IncludePath)</IncludePath>
     <LibraryPath>$(DXSDK_DIR)Lib\$(PlatformTarget);$(CG_LIB64_PATH);$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)</OutDir>
@@ -94,13 +94,13 @@
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)</OutDir>
     <IntDir>$(SolutionDir)_Intermediate\$(ProjectName)\$(Configuration)\$(PlatformTarget)\</IntDir>
-    <TargetName>$(ProjectName)</TargetName>
+    <TargetName>$(ProjectName)pp</TargetName>
     <IncludePath>$(DXSDK_DIR)include;$(CG_INC_PATH);$(IncludePath)</IncludePath>
     <LibraryPath>$(DXSDK_DIR)Lib\$(PlatformTarget);$(CG_LIB_PATH);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release Unicode|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <TargetName>$(ProjectName)-x64</TargetName>
+    <TargetName>$(ProjectName)pp-x64</TargetName>
     <IncludePath>$(DXSDK_DIR)include;$(CG_INC_PATH);$(IncludePath)</IncludePath>
     <LibraryPath>$(DXSDK_DIR)Lib\$(PlatformTarget);$(CG_LIB64_PATH);$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)</OutDir>
@@ -650,6 +650,7 @@
     <ClCompile Include="gl_core_3_1.c" />
     <ClCompile Include="image_functions.cpp" />
     <ClCompile Include="InputCustom.cpp" />
+    <ClCompile Include="kaillera.cpp" />
     <ClCompile Include="render.cpp" />
     <ClCompile Include="wconfig.cpp" />
     <ClCompile Include="win32.cpp" />
@@ -706,6 +707,5 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>

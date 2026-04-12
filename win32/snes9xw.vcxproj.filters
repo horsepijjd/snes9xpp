@@ -557,6 +557,9 @@
     <ClCompile Include="InputCustom.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="kaillera.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
     <ClCompile Include="render.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
@@ -575,6 +578,9 @@
     <ClCompile Include="wsnes9x.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClInclude Include="kaillera.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
     <ClCompile Include="CXAudio2.cpp">
       <Filter>GUI\SoundDriver</Filter>
     </ClCompile>

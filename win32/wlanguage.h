@@ -6,7 +6,7 @@
 
 /* This is where all the GUI text strings will eventually end up */
 
-#define WINDOW_TITLE TEXT("Snes9x")
+#define WINDOW_TITLE TEXT("Snes9x++ 0.1 core 1.63")
 
 // the windows registry is no longer used
 //#define MY_REG_KEY   "Software\\Emulators\\Snes9x"
@@ -36,7 +36,7 @@ Nintendo is a trademark.")
 #define SNES9X_WARN TEXT("Snes9x: WARNING!")
 #define SNES9X_DXS TEXT("Snes9x: DirectSound")
 #define SNES9X_SNDQ TEXT("Snes9x: Sound CPU Question")
-#define SNES9X_NP_ERROR TEXT("Snes9x: NetPlay Error")
+#define SNES9X_NP_ERROR TEXT("Snes9x: Netplay Error")
 #define BUTTON_OK TEXT("&OK")
 #define BUTTON_CANCEL TEXT("&Cancel")
 
@@ -137,8 +137,10 @@ Nintendo is a trademark.")
 #define HOTKEYS_LABEL_4_12 TEXT("Load from file:")
 
 #define HOTKEYS_SWITCH_ASPECT_RATIO TEXT("Switch aspect Ratio:")
+#define HOTKEYS_KAILLERA_CHAT TEXT("Kaillera chat:")
 #define HOTKEYS_CHEAT_EDITOR_DIALOG TEXT("Cheats Editor Dialog:")
 #define HOTKEYS_CHEAT_SEARCH_DIALOG TEXT("Cheats Search Dialog:")
+#define HOTKEYS_SAVE_ROM TEXT("Save ROM:")
 
 // gaming buttons and axes
 #define GAMEDEVICE_JOYNUMPREFIX "(J%x)" // don't change this
@@ -291,7 +293,7 @@ Nintendo is a trademark.")
 #define WINPROC_TURBO_DOWN_ON "Turbo Down Activated"
 #define WINPROC_TURBO_DOWN_OFF "Turbo Down Deactivated"
 #define WINPROC_FILTER_RESTART "You will need to restart Snes9x before the output image\nprocessing option change will take effect."
-#define WINPROC_DISCONNECT "Disconnect from the NetPlay server first."
+#define WINPROC_DISCONNECT "Disconnect from the Netplay server first."
 #define WINPROC_NET_RESTART "Your game will be reset after the ROM has been sent due to\nyour 'Sync Using Reset Game' setting.\n\n"
 #define WINPROC_SYNC_SND "Sync sound"
 #define WINPROC_REWINDING_TEXT "Rewinding"
@@ -313,6 +315,7 @@ Nintendo is a trademark.")
 
 #define NPOPT_TITLE TEXT("Netplay Options")
 #define NPOPT_LABEL_PORTNUM TEXT("Socket Port Number")
+#define NPOPT_LABEL_USERNAME TEXT("Username")
 #define NPOPT_LABEL_PAUSEINTERVAL TEXT("Ask Server to Pause when")
 #define NPOPT_LABEL_PAUSEINTERVAL_TEXT TEXT("frames behind")
 #define NPOPT_LABEL_MAXSKIP TEXT("Maximum Frame Rate Skip")
@@ -447,3 +450,21 @@ Nintendo is a trademark.")
 #define MULTICART_BIOS_FOUND TEXT("")
 
 #define ABOUT_DIALOG_TITLE TEXT("About ")
+
+// Kaillera
+#define KAILLERA_TITLE                  TEXT("Kaillera")
+#define KAILLERA_NO_DLL                 TEXT("Unable to load kailleraclient.dll.\nPlace it in the same folder as Snes9x.")
+#define KAILLERA_NO_ROMS                TEXT("No compatible ROMs found in the ROM directory.\nCheck your ROM directory in the emulation settings.")
+#define KAILLERA_GAME_STARTING          "Kaillera: game starting..."
+#define KAILLERA_GAME_ENDED             "Kaillera: game ended."
+#define KAILLERA_GAME_CLOSED            "Kaillera: game closed (ROM changed)."
+#define KAILLERA_SENDING_STATE          "Kaillera: sending save state..."
+#define KAILLERA_SENDING_SRAM           "Kaillera: sending save RAM..."
+#define KAILLERA_RECEIVING_STATE        "Kaillera: receiving save state %d%%..."
+#define KAILLERA_RECEIVING_SRAM         "Kaillera: receiving save RAM %d%%..."
+#define KAILLERA_TRANSFER_DONE          "Kaillera: transfer complete."
+#define KAILLERA_PLAYER_DROPPED         "Kaillera: %s dropped."
+#define KAILLERA_MOVIE_STARTED          "Kaillera movie: recording started."
+#define KAILLERA_MOVIE_STOPPED          "Kaillera movie: recording stopped."
+#define KAILLERA_REBUILDING_CACHE       "Kaillera: rebuilding game cache..."
+#define KAILLERA_CACHE_BUILT            "Kaillera: game cache built (%d games)."
