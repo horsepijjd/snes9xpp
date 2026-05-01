@@ -2493,17 +2493,21 @@ static bool load_dll(void)
     api.dll = LoadLibrary(TEXT("kailleraclient.dll"));
     if (!api.dll) return false;
 
-    /* Use decorated __stdcall names exactly as in the Kaillera reference */
-#define RESOLVE(member, name) \
-    api.member = (decltype(api.member))GetProcAddress(api.dll, "_kaillera" name)
-    RESOLVE(getVersion,         "GetVersion@4");
-    RESOLVE(init,               "Init@0");
-    RESOLVE(shutdown,           "Shutdown@0");
-    RESOLVE(setInfos,           "SetInfos@4");
-    RESOLVE(selectServerDialog, "SelectServerDialog@4");
-    RESOLVE(modifyPlayValues,   "ModifyPlayValues@8");
-    RESOLVE(chatSend,           "ChatSend@4");
-    RESOLVE(endGame,            "EndGame@0");
+    /* On x86, __stdcall exports are decorated: _kailleraInit@0, etc.
+     * On x64, there is no __stdcall decoration: exports are just kailleraInit.
+     * Try the decorated name first (x86), then fall back to undecorated (x64). */
+#define RESOLVE(member, decorated, undecorated) \
+    api.member = (decltype(api.member))GetProcAddress(api.dll, decorated); \
+    if (!api.member) \
+        api.member = (decltype(api.member))GetProcAddress(api.dll, undecorated)
+    RESOLVE(getVersion,         "_kailleraGetVersion@4",         "kailleraGetVersion");
+    RESOLVE(init,               "_kailleraInit@0",               "kailleraInit");
+    RESOLVE(shutdown,           "_kailleraShutdown@0",           "kailleraShutdown");
+    RESOLVE(setInfos,           "_kailleraSetInfos@4",           "kailleraSetInfos");
+    RESOLVE(selectServerDialog, "_kailleraSelectServerDialog@4", "kailleraSelectServerDialog");
+    RESOLVE(modifyPlayValues,   "_kailleraModifyPlayValues@8",   "kailleraModifyPlayValues");
+    RESOLVE(chatSend,           "_kailleraChatSend@4",           "kailleraChatSend");
+    RESOLVE(endGame,            "_kailleraEndGame@0",            "kailleraEndGame");
 #undef RESOLVE
 
     if (!api.init || !api.shutdown || !api.setInfos ||
