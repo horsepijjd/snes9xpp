@@ -6,13 +6,14 @@
 
 /* This is where all the GUI text strings will eventually end up */
 
-#define WINDOW_TITLE TEXT("Snes9x++ 0.1 core 1.63")
+#define WINDOW_TITLE TEXT("Snes9x++ 0.1b core 1.63")
 
 // the windows registry is no longer used
-//#define MY_REG_KEY   "Software\\Emulators\\Snes9x"
-//#define REG_KEY_VER  "1.31"
+// #define MY_REG_KEY   "Software\\Emulators\\Snes9x"
+// #define REG_KEY_VER  "1.31"
 
-#define DISCLAIMER_TEXT        TEXT("Snes9x v%s for Windows.\r\n\
+#define DISCLAIMER_TEXT                                                        \
+  TEXT("Snes9x v%s for Windows.\r\n\
 (c) Copyright 1996 - 2002  Gary Henderson and Jerremy Koot (jkoot@snes9x.com)\r\n\
 (c) Copyright 2002 - 2004  Matthew Kendora\r\n\
 (c) Copyright 2002 - 2005  Peter Bortas\r\n\
@@ -29,7 +30,6 @@ Please visit http://www.snes9x.com for\r\n\
 up-to-the-minute information and help on Snes9x.\r\n\r\n\
 Nintendo is a trademark.")
 
-
 #define APP_NAME TEXT("Snes9x")
 // possible global strings
 #define SNES9X_INFO TEXT("Snes9x: Information")
@@ -43,9 +43,9 @@ Nintendo is a trademark.")
 // Gamepad Dialog Strings
 #define INPUTCONFIG_TITLE TEXT("Input Configuration")
 #define INPUTCONFIG_JPTOGGLE TEXT("Enabled")
-//#define INPUTCONFIG_DIAGTOGGLE "Toggle Diagonals"
-//#define INPUTCONFIG_OK "&OK"
-//#define INPUTCONFIG_CANCEL "&Cancel"
+// #define INPUTCONFIG_DIAGTOGGLE "Toggle Diagonals"
+// #define INPUTCONFIG_OK "&OK"
+// #define INPUTCONFIG_CANCEL "&Cancel"
 #define INPUTCONFIG_JPCOMBO TEXT("Joypad #%d")
 #define INPUTCONFIG_LABEL_UP TEXT("Up")
 #define INPUTCONFIG_LABEL_DOWN TEXT("Down")
@@ -63,7 +63,10 @@ Nintendo is a trademark.")
 #define INPUTCONFIG_LABEL_UPRIGHT TEXT("Up Right")
 #define INPUTCONFIG_LABEL_DOWNRIGHT TEXT("Dn Right")
 #define INPUTCONFIG_LABEL_DOWNLEFT TEXT("Dn Left")
-#define INPUTCONFIG_LABEL_BLUE TEXT("Blue means the button is already mapped.\nPink means it conflicts with a custom hotkey.\nRed means it's reserved by Windows.\nButtons can be disabled using Escape.")
+#define INPUTCONFIG_LABEL_BLUE                                                 \
+  TEXT("Blue means the button is already mapped.\nPink means it conflicts "    \
+       "with a custom hotkey.\nRed means it's reserved by Windows.\nButtons "  \
+       "can be disabled using Escape.")
 #define INPUTCONFIG_LABEL_UNUSED TEXT("")
 #define INPUTCONFIG_LABEL_CLEAR_TOGGLES_AND_TURBO TEXT("Clear All")
 #define INPUTCONFIG_LABEL_MAKE_TURBO TEXT("TempTurbo")
@@ -76,7 +79,10 @@ Nintendo is a trademark.")
 #define HOTKEYS_CONTROL_MOD "Ctrl + "
 #define HOTKEYS_SHIFT_MOD "Shift + "
 #define HOTKEYS_ALT_MOD "Alt + "
-#define HOTKEYS_LABEL_BLUE TEXT("Blue means the hotkey is already mapped.\nPink means it conflicts with a game button.\nRed means it's reserved by Windows.\nA hotkey can be disabled using Escape.")
+#define HOTKEYS_LABEL_BLUE                                                     \
+  TEXT("Blue means the hotkey is already mapped.\nPink means it conflicts "    \
+       "with a game button.\nRed means it's reserved by Windows.\nA hotkey "   \
+       "can be disabled using Escape.")
 #define HOTKEYS_HKCOMBO TEXT("Page %d")
 #define HOTKEYS_LABEL_1_1 TEXT("Speed +:")
 #define HOTKEYS_LABEL_1_2 TEXT("Speed -:")
@@ -122,7 +128,6 @@ Nintendo is a trademark.")
 #define HOTKEYS_LABEL_3_12 TEXT("Turbo Down mode:")
 #define HOTKEYS_LABEL_3_13 TEXT("SuperScope turbo:")
 
-
 #define HOTKEYS_LABEL_4_1 TEXT("Select Slot 0:")
 #define HOTKEYS_LABEL_4_2 TEXT("Select Slot 1:")
 #define HOTKEYS_LABEL_4_3 TEXT("Select Slot 2:")
@@ -155,7 +160,7 @@ Nintendo is a trademark.")
 #define GAMEDEVICE_POVDOWN "POV Down"
 #define GAMEDEVICE_POVDNLEFT "POV Dn Left"
 #define GAMEDEVICE_POVDNRIGHT "POV Dn Right"
-#define GAMEDEVICE_POVUPLEFT  "POV Up Left"
+#define GAMEDEVICE_POVUPLEFT "POV Up Left"
 #define GAMEDEVICE_POVUPRIGHT "POV Up Right"
 #define GAMEDEVICE_ZPOS "Z Up"
 #define GAMEDEVICE_ZNEG "Z Down"
@@ -240,13 +245,12 @@ Nintendo is a trademark.")
 #define GAMEDEVICE_VK_F11 "F11"
 #define GAMEDEVICE_VK_F12 "F12"
 
-
-//evil things I found in WinProc
+// evil things I found in WinProc
 
 #define WINPROC_TURBOMODE_ON "Fast-Forward Activated"
 #define WINPROC_TURBOMODE_OFF "Fast-Forward Deactivated"
 #define WINPROC_TURBOMODE_TEXT "Fast-Forward"
-#define WINPROC_BG1 "BG#1" //Background Layers
+#define WINPROC_BG1 "BG#1" // Background Layers
 #define WINPROC_BG2 "BG#2"
 #define WINPROC_BG3 "BG#3"
 #define WINPROC_BG4 "BG#4"
@@ -292,26 +296,31 @@ Nintendo is a trademark.")
 #define WINPROC_TURBO_UP_OFF "Turbo Up Deactivated"
 #define WINPROC_TURBO_DOWN_ON "Turbo Down Activated"
 #define WINPROC_TURBO_DOWN_OFF "Turbo Down Deactivated"
-#define WINPROC_FILTER_RESTART "You will need to restart Snes9x before the output image\nprocessing option change will take effect."
+#define WINPROC_FILTER_RESTART                                                 \
+  "You will need to restart Snes9x before the output image\nprocessing "       \
+  "option change will take effect."
 #define WINPROC_DISCONNECT "Disconnect from the Netplay server first."
-#define WINPROC_NET_RESTART "Your game will be reset after the ROM has been sent due to\nyour 'Sync Using Reset Game' setting.\n\n"
+#define WINPROC_NET_RESTART                                                    \
+  "Your game will be reset after the ROM has been sent due to\nyour 'Sync "    \
+  "Using Reset Game' setting.\n\n"
 #define WINPROC_SYNC_SND "Sync sound"
 #define WINPROC_REWINDING_TEXT "Rewinding"
 #define WINPROC_REWINDING_DISABLED "Rewind is disabled"
 
-//Emulator Settings
+// Emulator Settings
 
 #define EMUSET_TITLE TEXT("Emulation Settings")
 #define EMUSET_LABEL_DIRECTORY TEXT("Directory")
 #define EMUSET_BROWSE TEXT("&Browse...")
 #define EMUSET_LABEL_ASRAM TEXT("Auto-Save S-RAM")
-#define EMUSET_LABEL_ASRAM_TEXT TEXT("seconds after last change (0 disables auto-save)")
+#define EMUSET_LABEL_ASRAM_TEXT                                                \
+  TEXT("seconds after last change (0 disables auto-save)")
 #define EMUSET_LABEL_SMAX TEXT("Skip at most")
 #define EMUSET_LABEL_SMAX_TEXT TEXT("frames in auto-frame rate mode")
 #define EMUSET_LABEL_STURBO TEXT("Skip Rendering")
 #define EMUSET_LABEL_STURBO_TEXT TEXT("frames in fast-forward mode")
 
-//Netplay Options
+// Netplay Options
 
 #define NPOPT_TITLE TEXT("Netplay Options")
 #define NPOPT_LABEL_PORTNUM TEXT("Socket Port Number")
@@ -326,8 +335,7 @@ Nintendo is a trademark.")
 #define NPOPT_CLIENTSETTINGSBLOCK TEXT("Client Settings")
 #define NPOPT_SERVERSETTINGSBLOCK TEXT("Server Settings")
 
-//Netplay Connect
-
+// Netplay Connect
 
 #define NPCON_TITLE TEXT("Connect to Server")
 #define NPCON_LABEL_SERVERADDY TEXT("Server Address")
@@ -336,19 +344,23 @@ Nintendo is a trademark.")
 #define NPCON_ENTERHOST TEXT("enter host name...")
 #define NPCON_PLEASE_ENTERHOST TEXT("Please enter a host name.")
 
-
-//Movie Messages
+// Movie Messages
 
 #define MOVIE_FILETYPE_DESCRIPTION TEXT("Snes9x Movie File")
 #define MOVIE_LABEL_SYNC_DATA_FROM_MOVIE TEXT("LOADED FROM MOVIE:")
-#define MOVIE_LABEL_SYNC_DATA_NOT_FROM_MOVIE TEXT("SETTINGS NOT IN MOVIE; VERIFY:")
+#define MOVIE_LABEL_SYNC_DATA_NOT_FROM_MOVIE                                   \
+  TEXT("SETTINGS NOT IN MOVIE; VERIFY:")
 #define MOVIE_ERR_COULD_NOT_OPEN TEXT("Could not open movie file.")
 #define MOVIE_ERR_NOT_FOUND_SHORT TEXT("File not found.")
-#define MOVIE_ERR_NOT_FOUND TEXT("The movie file was not found or could not be opened.")
+#define MOVIE_ERR_NOT_FOUND                                                    \
+  TEXT("The movie file was not found or could not be opened.")
 #define MOVIE_ERR_WRONG_FORMAT_SHORT TEXT("Unrecognized format.")
-#define MOVIE_ERR_WRONG_FORMAT TEXT("The movie file is corrupt or in the wrong format.")
+#define MOVIE_ERR_WRONG_FORMAT                                                 \
+  TEXT("The movie file is corrupt or in the wrong format.")
 #define MOVIE_ERR_WRONG_VERSION_SHORT TEXT("Unsupported movie version.")
-#define MOVIE_ERR_WRONG_VERSION MOVIE_ERR_WRONG_VERSION_SHORT TEXT(" You need a different version of Snes9x to play this movie.")
+#define MOVIE_ERR_WRONG_VERSION                                                \
+  MOVIE_ERR_WRONG_VERSION_SHORT TEXT(                                          \
+      " You need a different version of Snes9x to play this movie.")
 #define MOVIE_ERR_NOFRAMETOGGLE "No movie; can't toggle frame count"
 #define MOVIE_ERR_NOREADONLYTOGGLE "No movie; can't toggle read-only"
 #define MOVIE_LABEL_AUTHORINFO TEXT("Author Info:")
@@ -359,7 +371,8 @@ Nintendo is a trademark.")
 #define MOVIE_INFO_ROMNOTSTORED TEXT(" (not stored in movie file)")
 #define MOVIE_INFO_ROMINFO TEXT(" crc32=%08X, name=%s")
 #define MOVIE_INFO_DIRECTORY TEXT(" Path: %s")
-#define MOVIE_WARNING_MISMATCH TEXT("WARNING: You don't have the right ROM loaded!")
+#define MOVIE_WARNING_MISMATCH                                                 \
+  TEXT("WARNING: You don't have the right ROM loaded!")
 #define MOVIE_WARNING_OK TEXT("Press OK to start playing the movie.")
 #define MOVIE_LABEL_STARTSETTINGS TEXT("Recording Start")
 #define MOVIE_LABEL_CONTSETTINGS TEXT("Record Controllers")
@@ -372,18 +385,22 @@ Nintendo is a trademark.")
 
 // AVI Messages
 
-#define AVI_CONFIGURATION_CHANGED "AVI recording stopped (configuration settings changed)."
+#define AVI_CONFIGURATION_CHANGED                                              \
+  "AVI recording stopped (configuration settings changed)."
 #define AVI_CREATION_FAILED "Failed to create AVI file."
 
 // Cheat or Cheat Search Messages
 
 #define SEARCH_TITLE_RANGEERROR TEXT("Range Error")
 #define SEARCH_TITLE_CHEATERROR TEXT("Snes9x Cheat Error")
-#define SEARCH_ERR_INVALIDNEWVALUE TEXT("You have entered an out of range or invalid value for the new value")
-#define SEARCH_ERR_INVALIDCURVALUE TEXT("You have entered an out of range or invalid value for\n\
+#define SEARCH_ERR_INVALIDNEWVALUE                                             \
+  TEXT("You have entered an out of range or invalid value for the new value")
+#define SEARCH_ERR_INVALIDCURVALUE                                             \
+  TEXT("You have entered an out of range or invalid value for\n\
                                    the current value. This value is used when a cheat is unapplied.\n\
                                    (If left blank, no value is restored when the cheat is unapplied)")
-#define SEARCH_ERR_INVALIDSEARCHVALUE TEXT("Please enter a valid value for a search!")
+#define SEARCH_ERR_INVALIDSEARCHVALUE                                          \
+  TEXT("Please enter a valid value for a search!")
 #define SEARCH_COLUMN_CODE TEXT("Code")
 #define SEARCH_COLUMN_ADDRESS TEXT("Address")
 #define SEARCH_COLUMN_VALUE TEXT("Value")
@@ -435,7 +452,8 @@ Nintendo is a trademark.")
 #define FILE_INFO_UNCROM_FILE_TYPE TEXT("Uncompressed ROM files")
 #define FILE_INFO_ANY_FILE_TYPE TEXT("All files")
 
-#define ERR_ROM_NOT_FOUND "ROM image \"%s\" was not found or could not be opened."
+#define ERR_ROM_NOT_FOUND                                                      \
+  "ROM image \"%s\" was not found or could not be opened."
 #define SRM_SAVE_FAILED "Failed to save SRM file."
 
 #define INFO_SAVE_SPC "Saving SPC Data."
@@ -452,19 +470,23 @@ Nintendo is a trademark.")
 #define ABOUT_DIALOG_TITLE TEXT("About ")
 
 // Kaillera
-#define KAILLERA_TITLE                  TEXT("Kaillera")
-#define KAILLERA_NO_DLL                 TEXT("Unable to load kailleraclient.dll.\nPlace it in the same folder as Snes9x.")
-#define KAILLERA_NO_ROMS                TEXT("No compatible ROMs found in the ROM directory.\nCheck your ROM directory in the emulation settings.")
-#define KAILLERA_GAME_STARTING          "Kaillera: game starting..."
-#define KAILLERA_GAME_ENDED             "Kaillera: game ended."
-#define KAILLERA_GAME_CLOSED            "Kaillera: game closed (ROM changed)."
-#define KAILLERA_SENDING_STATE          "Kaillera: sending save state..."
-#define KAILLERA_SENDING_SRAM           "Kaillera: sending save RAM..."
-#define KAILLERA_RECEIVING_STATE        "Kaillera: receiving save state %d%%..."
-#define KAILLERA_RECEIVING_SRAM         "Kaillera: receiving save RAM %d%%..."
-#define KAILLERA_TRANSFER_DONE          "Kaillera: transfer complete."
-#define KAILLERA_PLAYER_DROPPED         "Kaillera: %s dropped."
-#define KAILLERA_MOVIE_STARTED          "Kaillera movie: recording started."
-#define KAILLERA_MOVIE_STOPPED          "Kaillera movie: recording stopped."
-#define KAILLERA_REBUILDING_CACHE       "Kaillera: rebuilding game cache..."
-#define KAILLERA_CACHE_BUILT            "Kaillera: game cache built (%d games)."
+#define KAILLERA_TITLE TEXT("Kaillera")
+#define KAILLERA_NO_DLL                                                        \
+  TEXT("Unable to load kailleraclient.dll.\nPlace it in the same folder as "   \
+       "Snes9x.")
+#define KAILLERA_NO_ROMS                                                       \
+  TEXT("No compatible ROMs found in the ROM directory.\nCheck your ROM "       \
+       "directory in the emulation settings.")
+#define KAILLERA_GAME_STARTING "Kaillera: game starting..."
+#define KAILLERA_GAME_ENDED "Kaillera: game ended."
+#define KAILLERA_GAME_CLOSED "Kaillera: game closed (ROM changed)."
+#define KAILLERA_SENDING_STATE "Kaillera: sending save state..."
+#define KAILLERA_SENDING_SRAM "Kaillera: sending save RAM..."
+#define KAILLERA_RECEIVING_STATE "Kaillera: receiving save state %d%%..."
+#define KAILLERA_RECEIVING_SRAM "Kaillera: receiving save RAM %d%%..."
+#define KAILLERA_TRANSFER_DONE "Kaillera: transfer complete."
+#define KAILLERA_PLAYER_DROPPED "Kaillera: %s dropped."
+#define KAILLERA_MOVIE_STARTED "Kaillera movie: recording started."
+#define KAILLERA_MOVIE_STOPPED "Kaillera movie: recording stopped."
+#define KAILLERA_REBUILDING_CACHE "Kaillera: rebuilding game cache..."
+#define KAILLERA_CACHE_BUILT "Kaillera: game cache built (%d games)."

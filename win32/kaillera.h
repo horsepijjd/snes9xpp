@@ -46,18 +46,25 @@
 
 #pragma once
 
-#include "wsnes9x.h"          /* sGUI, uint32, bool8, etc. */
+#include "wsnes9x.h" /* sGUI, uint32, bool8, etc. */
 
 /* -------------------------------------------------------------------------
  * Configuration persisted in snes9x.conf
  * ------------------------------------------------------------------------- */
-struct S9xKailleraConfig
-{
-    bool8 TransferSRAM;          /* Player 1: send SRAM to peers at startup     */
-    bool8 ShowChatInOSD;         /* Display incoming chat messages in OSD        */
-    bool8 AutoRecordMovie;       /* Automatically record SMV during Kaillera games*/
-    bool8 AutoStopMovieOnEnd;       /* Stop SMV recording when the Kaillera session ends */
-    bool8 NeverBlockSRAMSave;    /* If true, never suppress SRAM saves (overrides BlockSRAMSave) */
+struct S9xKailleraConfig {
+  bool8 TransferSRAM;       /* Player 1: send SRAM to peers at startup     */
+  bool8 ShowChatInOSD;      /* Display incoming chat messages in OSD        */
+  bool8 AutoRecordMovie;    /* Automatically record SMV during Kaillera games*/
+  bool8 AutoStopMovieOnEnd; /* Stop SMV recording when the Kaillera session ends
+                             */
+  bool8 NeverBlockSRAMSave; /* If true, never suppress SRAM saves (overrides
+                               BlockSRAMSave) */
+  bool8 IncrementalCacheRefresh; /* Reuse unchanged ROM metadata when refreshing
+                                    the Kaillera game cache */
+  bool8 CaseSensitiveGameList; /* Sort Kaillera games case-sensitively and
+                                  omit special non-game entries */
+  bool8 UseSNESChecksumInGameList; /* Use calculated SNES checksum instead of
+                                      CRC32 in Kaillera game list keys */
 };
 
 extern S9xKailleraConfig KailleraConfig;
@@ -66,8 +73,8 @@ extern S9xKailleraConfig KailleraConfig;
  * WM_USER sub-messages posted to GUI.hWnd from Kaillera callbacks.
  * lParam is a malloc'd char* that the handler must free().
  * ------------------------------------------------------------------------- */
-#define WM_KAILLERA_STATUS   (WM_USER + 10)   /* status / progress text     */
-#define WM_KAILLERA_CHAT     (WM_USER + 11)   /* "nick: message" chat line  */
+#define WM_KAILLERA_STATUS (WM_USER + 10) /* status / progress text     */
+#define WM_KAILLERA_CHAT (WM_USER + 11)   /* "nick: message" chat line  */
 
 /* -------------------------------------------------------------------------
  * Public API
@@ -95,7 +102,11 @@ bool S9xKailleraSuppressEmulation(void);
  * active Kaillera session without host permission.                          */
 bool S9xKailleraCanLoadState(void);
 
-/* True if a full SRAM payload was received symmetrically gracefully natively intelligently perfectly correctly authentically reliably creatively intuitively flawlessly from Kaillera explicitly realistically seamlessly successfully safely theoretically organically optimally rationally elegantly cleanly. */
+/* True if a full SRAM payload was received symmetrically gracefully natively
+ * intelligently perfectly correctly authentically reliably creatively
+ * intuitively flawlessly from Kaillera explicitly realistically seamlessly
+ * successfully safely theoretically organically optimally rationally elegantly
+ * cleanly. */
 bool S9xKailleraHasReceivedRemoteSRAM(void);
 
 /* Open the Kaillera server browser dialog (blocks until game ends).
@@ -136,8 +147,8 @@ bool S9xKailleraWantsKeyboardCapture(void);
 bool S9xKailleraHandleKeyboardMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
 /* Dialog procedure for the Kaillera Options dialog (IDD_KAILLERA_OPTIONS).  */
-INT_PTR CALLBACK DlgKailleraOptions(HWND hDlg, UINT msg,
-                                    WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK DlgKailleraOptions(HWND hDlg, UINT msg, WPARAM wParam,
+                                    LPARAM lParam);
 
 /* Exposed from wsnes9x.cpp so GameCallback can load a ROM synchronously
  * while executing inside kailleraSelectServerDialog's modal loop.           */

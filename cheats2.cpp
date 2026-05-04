@@ -589,13 +589,24 @@ static bool S9xCheatIsDuplicate(const std::string &name, const std::string &code
 {
     for (size_t i = 0; i < Cheat.group.size(); i++)
     {
-        if (Cheat.group[i].name == name)
+        if (Settings.UseOldCheatsFormat)
         {
-            auto code_string = S9xCheatGroupToText(i);
-            auto validated_string = S9xCheatValidate(code);
-
-            if (validated_string == code_string)
+            /* Old binary format stores one address+byte per record, so multi-code
+               groups get split on save. Code comparison is invalid after round-tripping
+               through the binary format, so match on name alone (first 19 chars). */
+            if (strncmp(Cheat.group[i].name.c_str(), name.c_str(), 19) == 0)
                 return true;
+        }
+        else
+        {
+            if (Cheat.group[i].name == name)
+            {
+                auto code_string = S9xCheatGroupToText(i);
+                auto validated_string = S9xCheatValidate(code);
+
+                if (validated_string == code_string)
+                    return true;
+            }
         }
     }
 
@@ -687,6 +698,53 @@ bool8 S9xLoadCheatFile(const std::string &filename)
     return (TRUE);
 }
 
+static bool8 S9xSaveCheatFileClassic(const std::string &filename)
+{
+    FILE *fs;
+    uint8 data[28];
+    bool first = true;
+
+    fs = fopen(filename.c_str(), "wb");
+    if (!fs)
+        return (FALSE);
+
+    for (unsigned int g = 0; g < Cheat.group.size(); g++)
+    {
+        for (unsigned int c = 0; c < Cheat.group[g].cheat.size(); c++)
+        {
+            memset(data, 0, 28);
+
+            if (first)
+            {
+                data[6] = 254;
+                data[7] = 252;
+                first = false;
+            }
+
+            if (!Cheat.group[g].enabled)
+                data[0] |= 4;
+
+            data[1] = Cheat.group[g].cheat[c].byte;
+            data[2] = (uint8)(Cheat.group[g].cheat[c].address >> 0);
+            data[3] = (uint8)(Cheat.group[g].cheat[c].address >> 8);
+            data[4] = (uint8)(Cheat.group[g].cheat[c].address >> 16);
+            data[5] = Cheat.group[g].cheat[c].saved_byte;
+
+            /* Truncate name to fit 20-byte null-terminated field (max 19 chars) */
+            std::string name = Cheat.group[g].name.substr(0, 19);
+            memcpy(&data[8], name.c_str(), name.length());
+
+            if (fwrite(data, 28, 1, fs) != 1)
+            {
+                fclose(fs);
+                return (FALSE);
+            }
+        }
+    }
+
+    return (fclose(fs) == 0);
+}
+
 bool8 S9xSaveCheatFile(const std::string &filename)
 {
     unsigned int i;
@@ -697,6 +755,9 @@ bool8 S9xSaveCheatFile(const std::string &filename)
         remove(filename.c_str());
         return TRUE;
     }
+
+    if (Settings.UseOldCheatsFormat)
+        return S9xSaveCheatFileClassic(filename);
 
     file = fopen(filename.c_str(), "w");
 

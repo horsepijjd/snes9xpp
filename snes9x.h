@@ -301,6 +301,7 @@ struct SSettings
 	bool8	FastSavestates;
 
 	bool8	ApplyCheats;
+	bool8	UseOldCheatsFormat;
 	bool8	NoPatch;
 	bool8	IgnorePatchChecksum;
 	bool8	IsPatched;
