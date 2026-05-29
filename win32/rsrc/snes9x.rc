@@ -968,6 +968,7 @@ BEGIN
             MENUITEM "Save Screenshot",             ID_SAVESCREENSHOT,MFT_STRING,MFS_ENABLED
             MENUITEM "Sa&ve S-RAM Data",            ID_FILE_SAVE_SRAM_DATA,MFT_STRING,MFS_ENABLED
             MENUITEM "Save Memory Pack",            ID_SAVEMEMPACK,MFT_STRING,MFS_ENABLED
+            MENUITEM "Save &ROM",                   ID_FILE_SAVE_ROM,MFT_STRING,MFS_ENABLED
         END
         MENUITEM "ROM Information...",          IDM_ROM_INFO,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR

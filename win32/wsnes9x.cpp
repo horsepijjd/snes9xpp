@@ -2381,6 +2381,9 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         S9xMessage(S9X_INFO, 0, String);
       }
     } break;
+    case ID_FILE_SAVE_ROM:
+      WinSaveROM();
+      break;
     case ID_FILE_RESET:
 #ifdef NETPLAY_SUPPORT
       if (Settings.NetPlayServer) {
@@ -2557,6 +2560,9 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
 
   case WM_CLOSE:
+    if (S9xKailleraIsClientOpen()) {
+      return 0;
+    }
     SaveMainWinPos();
     /* End Kaillera session immediately so networking tears down before destroy.
      */
@@ -3939,6 +3945,7 @@ static void CheckMenuStates() {
     mii.fState |= MFS_DISABLED;
   SetMenuItemInfo(GUI.hMenu, ID_FILE_SAVE_SPC_DATA, FALSE, &mii);
   SetMenuItemInfo(GUI.hMenu, ID_FILE_SAVE_SRAM_DATA, FALSE, &mii);
+  SetMenuItemInfo(GUI.hMenu, ID_FILE_SAVE_ROM, FALSE, &mii);
 
   for (int i = ID_FILE_SAVE0; i <= ID_FILE_SAVE_FILE; i++)
     SetMenuItemInfo(GUI.hMenu, i, FALSE, &mii);
@@ -12185,8 +12192,7 @@ void S9xPostRomInit() {
 }
 
 void WinSaveROM() {
-  if (!Memory.ROM || Memory.CalculatedSize == 0) {
-    S9xMessage(S9X_ERROR, S9X_ROM_INFO, "No ROM loaded to save.");
+  if (!Memory.ROM || Memory.CalculatedSize == 0 || Settings.StopEmulation) {
     return;
   }
 
@@ -12237,12 +12243,20 @@ void WinSaveROM() {
         return;
       }
 
-      // Get the original ROM filename for internal zip name
-      std::string internalName = Memory.ROMFilename;
-      size_t lastSlash = internalName.find_last_of("/\\");
+      // Get the chosen zip filename (without path) and replace extension with .sfc
+      std::string zipFileName = _tToChar(szFileName);
+      size_t lastSlash = zipFileName.find_last_of("/\\");
+      std::string internalName;
       if (lastSlash != std::string::npos) {
-        internalName = internalName.substr(lastSlash + 1);
+        internalName = zipFileName.substr(lastSlash + 1);
+      } else {
+        internalName = zipFileName;
       }
+      size_t lastDot = internalName.find_last_of('.');
+      if (lastDot != std::string::npos) {
+        internalName = internalName.substr(0, lastDot);
+      }
+      internalName += ".sfc";
 
       // Write ROM data to zip with max compression
       int err = zipOpenNewFileInZip(zf, internalName.c_str(),

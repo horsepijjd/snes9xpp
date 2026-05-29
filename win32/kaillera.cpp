@@ -355,6 +355,7 @@ S9xKailleraConfig KailleraConfig = {TRUE, TRUE, FALSE, FALSE,
                                       FALSE, TRUE, FALSE, FALSE};
 static KailleraApi api;
 static KailleraRuntime rt;
+static bool s_client_dialog_open = false;
 static std::basic_string<TCHAR> state_transfer_title_base;
 static bool state_transfer_title_active = false;
 static void clear_state_transfer_title(void);
@@ -2690,8 +2691,11 @@ void S9xKailleraShowClient(HWND parent) {
     return;
   }
 
-  if (api.selectServerDialog)
+  if (api.selectServerDialog) {
+    s_client_dialog_open = true;
     api.selectServerDialog(parent ? parent : GUI.hWnd);
+    s_client_dialog_open = false;
+  }
 }
 
 void S9xKailleraShutdown(void) {
@@ -2708,6 +2712,7 @@ void S9xKailleraShutdown(void) {
 
 bool S9xKailleraIsAvailable(void) { return api.dll != NULL; }
 bool S9xKailleraIsActive(void) { return rt.active; }
+bool S9xKailleraIsClientOpen(void) { return s_client_dialog_open || rt.active; }
 bool S9xKailleraSuppressEmulation(void) {
   return rt.active && rt.suppress_emulation;
 }

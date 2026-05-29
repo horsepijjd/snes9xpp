@@ -94,6 +94,9 @@ bool S9xKailleraIsAvailable(void);
 /* True while a Kaillera game session is active.                             */
 bool S9xKailleraIsActive(void);
 
+/* True while the Kaillera server browser dialog or a game session is open.  */
+bool S9xKailleraIsClientOpen(void);
+
 /* True during the startup synchronisation phase; the main loop should skip
  * S9xMainLoop() but still pump Windows messages.                            */
 bool S9xKailleraSuppressEmulation(void);
