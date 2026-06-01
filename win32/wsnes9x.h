@@ -173,6 +173,10 @@ struct sGUI {
 	bool AlwaysCenterImage;
 	bool EmulateFullscreen;
 	bool EmulatedFullscreen;
+	bool BorderlessWindowActive;
+	bool borderlessDragging;
+	int  borderlessDragStartX;
+	int  borderlessDragStartY;
 	bool LocalVidMem;
 	bool Vsync;
 	bool ReduceInputLag;
@@ -359,6 +363,7 @@ struct SCustomKeys {
     SCustomKey CheatEditorDialog;
     SCustomKey CheatSearchDialog;
     SCustomKey SaveROM;
+    SCustomKey BorderlessWindow;
 };
 
 struct SJoypad {

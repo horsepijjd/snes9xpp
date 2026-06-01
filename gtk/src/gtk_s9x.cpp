@@ -373,7 +373,9 @@ void S9xMessage(int type, int number, const char *message)
         }
         case S9X_ROM_INFO:
         {
-            S9xSetInfoString(Memory.GetMultilineROMInfo().c_str());
+            S9xSetInfoString(Settings.UseZSNESFont
+                ? Memory.GetZSNESROMInfo().c_str()
+                : Memory.GetMultilineROMInfo().c_str());
             break;
         }
         default:

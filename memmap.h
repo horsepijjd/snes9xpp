@@ -178,6 +178,7 @@ struct CMemory
 
 	void	MakeRomInfoText (char *);
 	std::string GetMultilineROMInfo();
+	std::string GetZSNESROMInfo();
 
 	const char *	MapType (void);
 	const char *	StaticRAMSize (void);

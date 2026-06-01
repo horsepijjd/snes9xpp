@@ -79,6 +79,10 @@ void WinSetDefaultValues() {
   GUI.LockDirectories = false;
   GUI.window_maximized = false;
   GUI.EmulatedFullscreen = false;
+  GUI.BorderlessWindowActive = false;
+  GUI.borderlessDragging = false;
+  GUI.borderlessDragStartX = 0;
+  GUI.borderlessDragStartY = 0;
   GUI.FullscreenOnOpen = false;
 
   WinDeleteRecentGamesList();
@@ -1315,6 +1319,17 @@ void WinRegisterConfigItems() {
            "true to show which buttons are pressed");
   AddBoolC("DisplayFrameCount", Settings.DisplayMovieFrame, true,
            "true to show the frame count when a movie is playing");
+  AddBoolC("ZSNESFont", Settings.UseZSNESFont, false,
+           "Hidden: use the small fixed-width ZSNES font (with a black box "
+           "around the text) for on-screen messages");
+  AddBoolC("ForceTextColor", Settings.ForceTextColor, false,
+           "Hidden: force the on-screen message text to a specific color");
+  AddUIntC("ForcedTextColor", Settings.ForcedTextColorRGB, 0xFFFFFF,
+           "Hidden: hex RGB color for forced text color (e.g. FFFFFF=white, "
+           "00FF00=green). Requires ForceTextColor=TRUE");
+  AddUIntC("OutlineColor", Settings.OutlineColorRGB, 0x000000,
+           "Hidden: hex RGB color for text outline/border (e.g. 000000=black). "
+           "Applies to the normal font outline and ZSNES font black background");
 #undef CATEGORY
 #define CATEGORY "Display\\Win"
   AddUIntC("OutputMethod", GUI.outputMethod, 1,
@@ -1397,6 +1412,8 @@ void WinRegisterConfigItems() {
   AddBoolC("Fullscreen:EmulateFullscreen", GUI.EmulateFullscreen, true,
            "true makes snes9x create a window that spans the entire screen "
            "when going fullscreen");
+  AddBoolC("BorderlessWindow", GUI.BorderlessWindowActive, false,
+           "true to use borderless window mode (no title bar or borders)");
   AddBoolC("HideMenu", GUI.HideMenu, false,
            "true to auto-hide the menu bar on startup.");
   AddBoolC("Vsync", GUI.Vsync, false, "true to enable Vsync");
@@ -1447,7 +1464,7 @@ void WinRegisterConfigItems() {
            "true to pause Snes9x when it is not the active window");
   AddBoolC("CustomRomOpenDialog", GUI.CustomRomOpen, false,
            "false to use standard Windows open dialog for the ROM open dialog");
-  AddBoolC("AddToRegistry", GUI.AddToRegistry, true,
+  AddBoolC("AddToRegistry", GUI.AddToRegistry, false,
            "true to ask to add entries to registry for file type associations");
   AddBoolC("AVIHiRes", GUI.AVIHiRes, false,
            "true to record AVI in Hi-Res scale");
@@ -1814,6 +1831,7 @@ void WinRegisterConfigItems() {
   ADD(KailleraChat);
   ADD(CheatEditorDialog);
   ADD(CheatSearchDialog);
+  ADD(BorderlessWindow);
 #undef ADD
 #undef ADDN
 #undef CATEGORY

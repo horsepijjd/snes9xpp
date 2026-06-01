@@ -464,7 +464,10 @@ static void close_chat_input(void) {
   rt.chat_input_active = false;
   rt.chat_input_swallow_until_tick = 0;
   rt.chat_input_text.clear();
-  S9xSetInfoString(" ");
+  if (Settings.UseZSNESFont)
+    S9xSetInfoStringChat(" ");
+  else
+    S9xSetInfoString(" ");
 }
 
 static void refresh_chat_input_osd(void) {
@@ -475,7 +478,10 @@ static void refresh_chat_input_osd(void) {
   const char *cursor = ((GetTickCount() / 400) & 1) ? "_" : " ";
   snprintf(buf, sizeof(buf), ">%s%s", rt.chat_input_text.c_str(), cursor);
   buf[sizeof(buf) - 1] = '\0';
-  S9xSetInfoString(buf);
+  if (Settings.UseZSNESFont)
+    S9xSetInfoStringChat(buf);
+  else
+    S9xSetInfoString(buf);
 }
 
 static void backspace_chat_input(void) {
@@ -2198,9 +2204,15 @@ static void WINAPI chat_callback(char *nick, char *text) {
   /* Regular chat */
   if (KailleraConfig.ShowChatInOSD) {
     char buf[512];
-    snprintf(buf, sizeof(buf), "%s: %s", nick, text);
+    if (Settings.UseZSNESFont)
+      snprintf(buf, sizeof(buf), "%s>%s", nick, text);
+    else
+      snprintf(buf, sizeof(buf), "%s: %s", nick, text);
     buf[sizeof(buf) - 1] = '\0';
-    post_status("%s", buf);
+    if (Settings.UseZSNESFont)
+      S9xSetInfoStringChat(buf);
+    else
+      post_status("%s", buf);
   }
 }
 
@@ -2982,6 +2994,9 @@ INT_PTR CALLBACK DlgKailleraOptions(HWND hDlg, UINT msg, WPARAM wParam,
                        KailleraConfig.IncrementalCacheRefresh ? BST_CHECKED
                                                               : BST_UNCHECKED,
                        0);
+    SendDlgItemMessage(
+        hDlg, IDC_KAILLERA_CLIENT_COMPAT, BM_SETCHECK,
+        KailleraConfig.CaseSensitiveGameList ? BST_CHECKED : BST_UNCHECKED, 0);
     return TRUE;
 
   case WM_COMMAND:
@@ -3001,6 +3016,8 @@ INT_PTR CALLBACK DlgKailleraOptions(HWND hDlg, UINT msg, WPARAM wParam,
       KailleraConfig.IncrementalCacheRefresh =
           IsDlgButtonChecked(hDlg, IDC_KAILLERA_INCREMENTAL_CACHE_REFRESH) ==
           BST_CHECKED;
+      KailleraConfig.CaseSensitiveGameList =
+          IsDlgButtonChecked(hDlg, IDC_KAILLERA_CLIENT_COMPAT) == BST_CHECKED;
       WinSaveConfigFile();
       EndDialog(hDlg, 1);
       return TRUE;

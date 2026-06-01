@@ -13,6 +13,8 @@
 #include "movie.h"
 #include "screenshot.h"
 #include "font.h"
+#include "zfont.h"
+#include "zfont_large.h"
 #include "display.h"
 
 extern struct SCheatData		Cheat;
@@ -1728,15 +1730,102 @@ void S9xSetInfoString (const char *string)
 	{
 		GFX.InfoString = string;
 		GFX.InfoStringTimeout = Settings.InitialInfoStringTimeout;
+		GFX.InfoStringUseLargeFont = false;
+		GFX.InfoStringUseBlackBackground = false;
+		S9xReRefresh();
+	}
+}
+
+void S9xSetInfoStringLarge (const char *string)
+{
+	if (Settings.InitialInfoStringTimeout > 0)
+	{
+		GFX.InfoString = string;
+		GFX.InfoStringTimeout = Settings.InitialInfoStringTimeout;
+		GFX.InfoStringUseLargeFont = true;
+		GFX.InfoStringUseBlackBackground = false;
+		S9xReRefresh();
+	}
+}
+
+void S9xSetInfoStringChat (const char *string)
+{
+	if (Settings.InitialInfoStringTimeout > 0)
+	{
+		GFX.InfoString = string;
+		GFX.InfoStringTimeout = Settings.InitialInfoStringTimeout;
+		GFX.InfoStringUseLargeFont = false;
+		GFX.InfoStringUseBlackBackground = true;
 		S9xReRefresh();
 	}
 }
 
 static int	font_width = 8, font_height = 9;
 
+static inline uint16 S9xGetTextColor()
+{
+	if (Settings.ForceTextColor)
+	{
+		uint8 r = (Settings.ForcedTextColorRGB >> 16) & 0xFF;
+		uint8 g = (Settings.ForcedTextColorRGB >> 8) & 0xFF;
+		uint8 b = Settings.ForcedTextColorRGB & 0xFF;
+		return BUILD_PIXEL(r >> 3, g >> 3, b >> 3);
+	}
+	return Settings.DisplayColor;
+}
+
+static inline uint16 S9xGetOutlineColor()
+{
+	uint8 r = (Settings.OutlineColorRGB >> 16) & 0xFF;
+	uint8 g = (Settings.OutlineColorRGB >> 8) & 0xFF;
+	uint8 b = Settings.OutlineColorRGB & 0xFF;
+	return BUILD_PIXEL(r >> 3, g >> 3, b >> 3);
+}
+
 void S9xDisplayChar (uint16 *s, uint8 c)
 {
-	const uint16	black = BUILD_PIXEL(0, 0, 0);
+	const uint16	black = S9xGetOutlineColor();
+	const uint16	textColor = S9xGetTextColor();
+
+	if (Settings.UseZSNESFont)
+	{
+		// ZSNES font: 5 rows tall, 6 pixels wide (5 content + 1 spacing).
+		// Rendered fixed-width. Black background only for chat messages.
+		// 1px black padding above and below the glyph (total cell = 7px tall).
+		uint8 glyph_idx = 0;
+		if (c >= 32)
+			glyph_idx = zfont_ascii_to_glyph[c - 32];
+
+		bool drawBg = GFX.InfoStringUseBlackBackground;
+
+		// Top padding row
+		for (int w = 0; w < ZFONT_WIDTH; w++, s++)
+		{
+			if (drawBg) *s = black;
+		}
+		s += GFX.RealPPL - ZFONT_WIDTH;
+
+		// 5 glyph rows
+		for (int h = 0; h < ZFONT_HEIGHT; h++, s += GFX.RealPPL - ZFONT_WIDTH)
+		{
+			uint8 row = zfont_data[glyph_idx][h];
+			for (int w = 0; w < ZFONT_WIDTH; w++, s++)
+			{
+				if (row & (0x80 >> w))
+					*s = textColor;
+				else if (drawBg)
+					*s = black;
+			}
+		}
+
+		// Bottom padding row
+		for (int w = 0; w < ZFONT_WIDTH; w++, s++)
+		{
+			if (drawBg) *s = black;
+		}
+
+		return;
+	}
 
 	int	line   = ((c - 32) >> 4) * font_height;
 	int	offset = ((c - 32) & 15) * font_width;
@@ -1748,7 +1837,7 @@ void S9xDisplayChar (uint16 *s, uint8 c)
 			char	p = font[line][offset + w];
 
 			if (p == '#')
-				*s = Settings.DisplayColor;
+				*s = textColor;
 			else
 			if (p == '.')
 				*s = black;
@@ -1756,10 +1845,85 @@ void S9xDisplayChar (uint16 *s, uint8 c)
 	}
 }
 
+// ZSNES large font renderer: 8x8 glyphs, no black background.
+// Shadow is drawn by halving the existing pixel at offset (0,+1) for each lit pixel.
+static void S9xDisplayCharLarge (uint16 *s, uint8 c)
+{
+	uint8 glyph_idx = 0;
+	if (c >= 32)
+		glyph_idx = zfont_ascii_to_glyph[c - 32];
+
+	if (glyph_idx >= ZFONT_LARGE_NUM_GLYPHS)
+		glyph_idx = 0;
+
+	// ZSNES method: for each lit pixel, also darken the pixel 1 row below.
+	// We render in two passes: first the shadow, then the text on top.
+
+	// Pass 1: Shadow (darken pixel at y+1 for each lit pixel)
+	uint16 *shadow = s + GFX.RealPPL; // 1 pixel down
+	for (int h = 0; h < ZFONT_LARGE_HEIGHT; h++, shadow += GFX.RealPPL - ZFONT_LARGE_WIDTH)
+	{
+		uint8 row = zfont_large_data[glyph_idx][h];
+		for (int w = 0; w < ZFONT_LARGE_WIDTH; w++, shadow++)
+		{
+			if (row & (0x80 >> w))
+				*shadow = (*shadow >> 1) & 0x7BEF; // halve RGB (mask out LSBs)
+		}
+	}
+
+	// Pass 2: Text (draw lit pixels in display color)
+	const uint16 textColor = S9xGetTextColor();
+	for (int h = 0; h < ZFONT_LARGE_HEIGHT; h++, s += GFX.RealPPL - ZFONT_LARGE_WIDTH)
+	{
+		uint8 row = zfont_large_data[glyph_idx][h];
+		for (int w = 0; w < ZFONT_LARGE_WIDTH; w++, s++)
+		{
+			if (row & (0x80 >> w))
+				*s = textColor;
+		}
+	}
+}
+
+// Display a string using the ZSNES large font (no background).
+static void S9xDisplayStringLarge(const char* string, int linesFromBottom, int pixelsFromLeft)
+{
+	if (GFX.ScreenBuffer.empty() || IPPU.RenderedScreenWidth == 0)
+		return;
+
+	int glyph_height = ZFONT_LARGE_HEIGHT;
+	int char_advance = ZFONT_LARGE_WIDTH;
+
+	if (pixelsFromLeft < 0)
+		pixelsFromLeft = 0;
+
+	uint16 *dst = GFX.Screen + (IPPU.RenderedScreenHeight - glyph_height * linesFromBottom) * GFX.RealPPL + pixelsFromLeft;
+
+	if (IPPU.RenderedScreenHeight % 224 && !Settings.ShowOverscan)
+		dst -= 8 * GFX.RealPPL;
+	else if (Settings.ShowOverscan)
+		dst += 8 * GFX.RealPPL;
+
+	int len = strlen(string);
+
+	for (int i = 0; i < len; i++)
+	{
+		if ((uint8) string[i] < 32)
+			continue;
+
+		S9xDisplayCharLarge(dst, string[i]);
+		dst += char_advance;
+	}
+}
+
 void S9xVariableDisplayString(const char* string, int linesFromBottom, int pixelsFromLeft, bool allowWrap, int type)
 {
 	if (GFX.ScreenBuffer.empty() || IPPU.RenderedScreenWidth == 0)
 		return;
+
+	// The ZSNES font uses 5x6 glyph cells drawn fixed-width with a solid
+	// black background plus 1px padding above and below (7px total height).
+	int glyph_height = Settings.UseZSNESFont ? ZFONT_CELL_HEIGHT : font_height;
+	int char_advance = Settings.UseZSNESFont ? ZFONT_WIDTH : (font_width - 1);
 
 	if (type == S9X_NO_INFO)
 	{
@@ -1774,9 +1938,18 @@ void S9xVariableDisplayString(const char* string, int linesFromBottom, int pixel
 				linesFromBottom -= 1;
 		}
 
+		// In ZSNES font mode, position text 2 characters from the bottom
+		// and 2 characters from the left to match ZSNES positioning.
+		if (Settings.UseZSNESFont)
+		{
+			linesFromBottom += 2;
+			if (pixelsFromLeft <= 1)
+				pixelsFromLeft = char_advance * 2;
+		}
+
 		if (pixelsFromLeft > 128)
 		{
-			int width = (font_width - 1) * strlen(string);
+			int width = char_advance * strlen(string);
 			if (width > 0)
 				width++;
 			pixelsFromLeft = SNES_WIDTH - width;
@@ -1788,7 +1961,7 @@ void S9xVariableDisplayString(const char* string, int linesFromBottom, int pixel
 	else if (pixelsFromLeft >= SNES_WIDTH)
 		pixelsFromLeft = SNES_WIDTH - 1;
 
-	int max_chars = (SNES_WIDTH - pixelsFromLeft) / (font_width - 1);
+	int max_chars = (SNES_WIDTH - pixelsFromLeft) / char_advance;
 	if (max_chars <= 0)
 		max_chars = 1;
 
@@ -1829,7 +2002,7 @@ void S9xVariableDisplayString(const char* string, int linesFromBottom, int pixel
 	if (min_lines > linesFromBottom)
 		linesFromBottom = min_lines;
 
-	uint16 *dst = GFX.Screen + (IPPU.RenderedScreenHeight - font_height * linesFromBottom) * GFX.RealPPL + pixelsFromLeft;
+	uint16 *dst = GFX.Screen + (IPPU.RenderedScreenHeight - glyph_height * linesFromBottom) * GFX.RealPPL + pixelsFromLeft;
 
 	if (IPPU.RenderedScreenHeight % 224 && !Settings.ShowOverscan)
 		dst -= 8 * GFX.RealPPL;
@@ -1846,7 +2019,7 @@ void S9xVariableDisplayString(const char* string, int linesFromBottom, int pixel
 			if (!allowWrap)
 				break;
 
-			dst += font_height * GFX.RealPPL - (font_width - 1) * char_count;
+			dst += glyph_height * GFX.RealPPL - char_advance * char_count;
 			if (dst >= GFX.Screen + IPPU.RenderedScreenHeight * GFX.RealPPL)
 				break;
 
@@ -1860,7 +2033,7 @@ void S9xVariableDisplayString(const char* string, int linesFromBottom, int pixel
 			continue;
 
 		S9xDisplayChar(dst, string[i]);
-		dst += font_width - 1;
+		dst += char_advance;
 		char_count++;
 	}
 }
@@ -1915,6 +2088,16 @@ static void DisplayFrameRate (void)
 		lastTime = currTime;
 		lastFrameCount = IPPU.TotalEmulatedFrames;
 	}
+
+	if (Settings.UseZSNESFont)
+	{
+		// ZSNES style: "60/60" (current fps / target fps), large font, bottom-right
+		sprintf(string, "%u/%u", calcFps, (unsigned int)Memory.ROMFramesPerSecond);
+		int pixelsFromLeft = IPPU.RenderedScreenWidth - ZFONT_LARGE_WIDTH * strlen(string) - 4;
+		S9xDisplayStringLarge(string, 2, pixelsFromLeft);
+		return;
+	}
+
 	sprintf(string, "%u fps", calcFps);
 	S9xDisplayString(string, 2, IPPU.RenderedScreenWidth - (font_width - 1) * strlen(string) - 1, false);
 
@@ -2105,10 +2288,20 @@ void S9xDisplayMessages (uint16 *screen, int ppl, int width, int height, int sca
 		DisplayPressedKeys();
 
 	if (Settings.DisplayMovieFrame && S9xMovieActive())
-		S9xDisplayString(GFX.FrameDisplayString, 1, 1, false);
+	{
+		if (Settings.UseZSNESFont)
+			S9xDisplayStringLarge(GFX.FrameDisplayString, 1, ZFONT_LARGE_WIDTH);
+		else
+			S9xDisplayString(GFX.FrameDisplayString, 1, 1, false);
+	}
 
 	if (!GFX.InfoString.empty())
-		S9xDisplayString(GFX.InfoString.c_str(), 5, 1, true);
+	{
+		if (Settings.UseZSNESFont && GFX.InfoStringUseLargeFont)
+			S9xDisplayStringLarge(GFX.InfoString.c_str(), 4, ZFONT_WIDTH * 2);
+		else
+			S9xDisplayString(GFX.InfoString.c_str(), 5, 1, true);
+	}
 }
 
 static uint16 get_crosshair_color (uint8 color)

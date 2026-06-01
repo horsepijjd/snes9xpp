@@ -319,8 +319,20 @@ static string& operator += (string &s, double d)
 
 static void DisplayStateChange (const char *str, bool8 on)
 {
-	snprintf(buf, sizeof(buf), "%s: %s", str, on ? "on":"off");
-	S9xSetInfoString(buf);
+	if (Settings.UseZSNESFont)
+	{
+		// ZSNES style: "FEATURE ENABLED" / "FEATURE DISABLED"
+		snprintf(buf, sizeof(buf), "%s %s", str, on ? "ENABLED" : "DISABLED");
+		// Convert to uppercase
+		for (char *p = buf; *p; p++)
+			if (*p >= 'a' && *p <= 'z') *p -= 32;
+		S9xSetInfoStringLarge(buf);
+	}
+	else
+	{
+		snprintf(buf, sizeof(buf), "%s: %s", str, on ? "on":"off");
+		S9xSetInfoString(buf);
+	}
 }
 
 static void DoGunLatch (int x, int y)
@@ -2155,7 +2167,8 @@ void S9xApplyCommand (s9xcommand_t cmd, int16 data1, int16 data2)
 
 					case ToggleEmuTurbo:
 						Settings.TurboMode = !Settings.TurboMode;
-						DisplayStateChange("Turbo mode", Settings.TurboMode);
+						if (!Settings.UseZSNESFont)
+							DisplayStateChange("Turbo mode", Settings.TurboMode);
 						break;
 
 					case ClipWindows:

@@ -66,6 +66,8 @@ struct SGFX
 
 	std::string InfoString;
 	uint32	InfoStringTimeout;
+	bool	InfoStringUseLargeFont;
+	bool	InfoStringUseBlackBackground;
 	char	FrameDisplayString[256];
 };
 

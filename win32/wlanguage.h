@@ -146,6 +146,7 @@ Nintendo is a trademark.")
 #define HOTKEYS_CHEAT_EDITOR_DIALOG TEXT("Cheats Editor Dialog:")
 #define HOTKEYS_CHEAT_SEARCH_DIALOG TEXT("Cheats Search Dialog:")
 #define HOTKEYS_SAVE_ROM TEXT("Save ROM:")
+#define HOTKEYS_BORDERLESS_WINDOW TEXT("Borderless Window:")
 
 // gaming buttons and axes
 #define GAMEDEVICE_JOYNUMPREFIX "(J%x)" // don't change this

@@ -122,6 +122,8 @@ INT_PTR CALLBACK DlgCreateMovie(HWND hDlg, UINT msg, WPARAM wParam,
                                 LPARAM lParam);
 INT_PTR CALLBACK DlgOpenMovie(HWND hDlg, UINT msg, WPARAM wParam,
                               LPARAM lParam);
+INT_PTR CALLBACK DlgTextConfig(HWND hDlg, UINT msg, WPARAM wParam,
+                               LPARAM lParam);
 HRESULT CALLBACK EnumModesCallback(LPDDSURFACEDESC lpDDSurfaceDesc,
                                    LPVOID lpContext);
 int WinSearchCheatDatabase();
@@ -755,8 +757,15 @@ void S9xRestoreWindowTitle() {
 void S9xDisplayStateChange(const char *str, bool8 on) {
   static char string[100];
 
-  sprintf(string, "%s %s", str, on ? "on" : "off");
-  S9xSetInfoString(string);
+  if (Settings.UseZSNESFont) {
+    sprintf(string, "%s %s", str, on ? "ENABLED" : "DISABLED");
+    for (char *p = string; *p; p++)
+      if (*p >= 'a' && *p <= 'z') *p -= 32;
+    S9xSetInfoStringLarge(string);
+  } else {
+    sprintf(string, "%s %s", str, on ? "on" : "off");
+    S9xSetInfoString(string);
+  }
 }
 
 static void UpdateScale(RenderFilter &Scale, RenderFilter &NextScale) {
@@ -782,7 +791,13 @@ static void ShowStatusSlotInfo() {
 
   sprintf(str, FREEZE_INFO_SET_SLOT_N, GUI.CurrentSaveSlot,
           exists ? "used" : "empty");
-  S9xSetInfoString(str);
+  if (Settings.UseZSNESFont)
+  {
+    sprintf(str, "STATE SLOT %d SELECTED", GUI.CurrentSaveSlot);
+    S9xSetInfoStringLarge(str);
+  }
+  else
+    S9xSetInfoString(str);
 }
 
 int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
@@ -1069,7 +1084,7 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
     }
     if (wParam == CustomKeys.FastForward.key &&
         modifiers == CustomKeys.FastForward.modifiers) {
-      if (!Settings.TurboMode)
+      if (!Settings.TurboMode && !Settings.UseZSNESFont)
         S9xMessage(S9X_INFO, S9X_TURBO_MODE, WINPROC_TURBOMODE_TEXT);
       Settings.TurboMode = TRUE;
       hitHotKey = true;
@@ -1077,10 +1092,12 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
     if (wParam == CustomKeys.FastForwardToggle.key &&
         modifiers == CustomKeys.FastForwardToggle.modifiers) {
       Settings.TurboMode ^= TRUE;
-      if (Settings.TurboMode)
-        S9xMessage(S9X_INFO, S9X_TURBO_MODE, WINPROC_TURBOMODE_ON);
-      else
-        S9xMessage(S9X_INFO, S9X_TURBO_MODE, WINPROC_TURBOMODE_OFF);
+      if (!Settings.UseZSNESFont) {
+        if (Settings.TurboMode)
+          S9xMessage(S9X_INFO, S9X_TURBO_MODE, WINPROC_TURBOMODE_ON);
+        else
+          S9xMessage(S9X_INFO, S9X_TURBO_MODE, WINPROC_TURBOMODE_OFF);
+      }
       hitHotKey = true;
     }
     if (wParam == CustomKeys.ShowPressed.key &&
@@ -1115,11 +1132,19 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
       else if (Settings.SkipFrames != AUTO_FRAMERATE)
         Settings.SkipFrames--;
 
-      if (Settings.SkipFrames == AUTO_FRAMERATE)
-        S9xSetInfoString(WINPROC_AUTOSKIP);
-      else {
-        sprintf(InfoString, WINPROC_FRAMESKIP, Settings.SkipFrames - 1);
-        S9xSetInfoString(InfoString);
+      if (Settings.SkipFrames == AUTO_FRAMERATE) {
+        if (Settings.UseZSNESFont)
+          S9xSetInfoStringLarge("AUTO FRAMERATE ENABLED");
+        else
+          S9xSetInfoString(WINPROC_AUTOSKIP);
+      } else {
+        if (Settings.UseZSNESFont) {
+          sprintf(InfoString, "FRAME SKIP SET TO %d", Settings.SkipFrames - 1);
+          S9xSetInfoStringLarge(InfoString);
+        } else {
+          sprintf(InfoString, WINPROC_FRAMESKIP, Settings.SkipFrames - 1);
+          S9xSetInfoString(InfoString);
+        }
       }
       hitHotKey = true;
     }
@@ -1130,11 +1155,19 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
       else if (Settings.SkipFrames < 10)
         Settings.SkipFrames++;
 
-      if (Settings.SkipFrames == AUTO_FRAMERATE)
-        S9xSetInfoString(WINPROC_AUTOSKIP);
-      else {
-        sprintf(InfoString, WINPROC_FRAMESKIP, Settings.SkipFrames - 1);
-        S9xSetInfoString(InfoString);
+      if (Settings.SkipFrames == AUTO_FRAMERATE) {
+        if (Settings.UseZSNESFont)
+          S9xSetInfoStringLarge("AUTO FRAMERATE ENABLED");
+        else
+          S9xSetInfoString(WINPROC_AUTOSKIP);
+      } else {
+        if (Settings.UseZSNESFont) {
+          sprintf(InfoString, "FRAME SKIP SET TO %d", Settings.SkipFrames - 1);
+          S9xSetInfoStringLarge(InfoString);
+        } else {
+          sprintf(InfoString, WINPROC_FRAMESKIP, Settings.SkipFrames - 1);
+          S9xSetInfoString(InfoString);
+        }
       }
       hitHotKey = true;
     }
@@ -1241,7 +1274,7 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
     }
     if (wParam == CustomKeys.Rewind.key &&
         modifiers == CustomKeys.Rewind.modifiers) {
-      if (!Settings.Rewinding)
+      if (!Settings.Rewinding && !Settings.UseZSNESFont)
         S9xMessage(S9X_INFO, 0,
                    GUI.rewindBufferSize ? WINPROC_REWINDING_TEXT
                                         : WINPROC_REWINDING_DISABLED);
@@ -1322,6 +1355,12 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
     if (wParam == CustomKeys.SaveROM.key &&
         modifiers == CustomKeys.SaveROM.modifiers) {
       WinSaveROM();
+      hitHotKey = true;
+    }
+    if (wParam == CustomKeys.BorderlessWindow.key &&
+        modifiers == CustomKeys.BorderlessWindow.modifiers &&
+        CustomKeys.BorderlessWindow.key != 0) {
+      ToggleBorderlessWindow();
       hitHotKey = true;
     }
 
@@ -2323,20 +2362,26 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     case ID_WINDOW_SIZE_7X:
     case ID_WINDOW_SIZE_8X:
     case ID_WINDOW_SIZE_9X:
-    case ID_WINDOW_SIZE_10X:
+    case ID_WINDOW_SIZE_10X: {
       UINT factor, newWidth, newHeight;
-      RECT margins;
       factor = (wParam & 0xffff) - ID_WINDOW_SIZE_1X + 1;
       newWidth = GUI.AspectWidth * factor;
       newHeight =
           (Settings.ShowOverscan ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT) * factor;
 
-      margins = GetWindowMargins(GUI.hWnd, newWidth);
-      newHeight += margins.top + margins.bottom;
-      newWidth += margins.left + margins.right;
-
-      SetWindowPos(GUI.hWnd, NULL, 0, 0, newWidth, newHeight, SWP_NOMOVE);
+      if (GUI.BorderlessWindowActive) {
+        // In borderless mode: no frame, no menu - just the client area
+        if (GetMenu(GUI.hWnd) != NULL)
+          SetMenu(GUI.hWnd, NULL);
+        SetWindowPos(GUI.hWnd, NULL, 0, 0, newWidth, newHeight, SWP_NOMOVE);
+      } else {
+        RECT margins = GetWindowMargins(GUI.hWnd, newWidth);
+        newHeight += margins.top + margins.bottom;
+        newWidth += margins.left + margins.right;
+        SetWindowPos(GUI.hWnd, NULL, 0, 0, newWidth, newHeight, SWP_NOMOVE);
+      }
       break;
+    }
     case ID_WINDOW_STRETCH:
       GUI.Stretch = !GUI.Stretch;
       WinDisplayApplyChanges();
@@ -2355,12 +2400,21 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     case ID_VIDEO_SHOWFRAMERATE:
       Settings.DisplayFrameRate = !Settings.DisplayFrameRate;
       break;
+    case ID_VIDEO_TEXTCONFIG:
+      RestoreGUIDisplay();
+      DialogBox(g_hInst, MAKEINTRESOURCE(IDD_TEXTCONFIG), hWnd,
+                DlgTextConfig);
+      RestoreSNESDisplay();
+      break;
     case ID_SAVESCREENSHOT:
       Settings.TakeScreenshot = true;
       break;
     case ID_FILE_SAVE_SPC_DATA:
       S9xDumpSPCSnapshot();
-      S9xMessage(S9X_INFO, 0, INFO_SAVE_SPC);
+      if (Settings.UseZSNESFont)
+        S9xSetInfoStringLarge(".SPC FILE SAVED.");
+      else
+        S9xMessage(S9X_INFO, 0, INFO_SAVE_SPC);
       break;
     case ID_FILE_SAVE_SRAM_DATA: {
       if (GUI.BlockSRAMSave)
@@ -2641,6 +2695,16 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     }
     break;
   case WM_MOUSEMOVE:
+    // Handle borderless window drag
+    if (GUI.borderlessDragging) {
+      POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+      ClientToScreen(GUI.hWnd, &pt);
+      SetWindowPos(GUI.hWnd, NULL,
+                   pt.x - GUI.borderlessDragStartX,
+                   pt.y - GUI.borderlessDragStartY,
+                   0, 0, SWP_NOSIZE | SWP_NOZORDER);
+      return 0;
+    }
     if (Settings.StopEmulation) {
       SetCursor(GUI.Arrow);
       break;
@@ -2775,10 +2839,34 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     GUI.MouseButtons &= ~1;
     break;
   case WM_RBUTTONDOWN:
+    // In borderless window mode with no mouse peripheral, allow dragging
+    if (GUI.BorderlessWindowActive &&
+        GUI.ControllerOption != SNES_MOUSE &&
+        GUI.ControllerOption != SNES_MOUSE_SWAPPED &&
+        GUI.ControllerOption != SNES_SUPERSCOPE &&
+        GUI.ControllerOption != SNES_JUSTIFIER &&
+        GUI.ControllerOption != SNES_JUSTIFIER_2 &&
+        GUI.ControllerOption != SNES_MACSRIFLE) {
+      // Start manual window drag
+      SetCapture(GUI.hWnd);
+      POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+      ClientToScreen(GUI.hWnd, &pt);
+      RECT rc;
+      GetWindowRect(GUI.hWnd, &rc);
+      GUI.borderlessDragStartX = pt.x - rc.left;
+      GUI.borderlessDragStartY = pt.y - rc.top;
+      GUI.borderlessDragging = true;
+      return 0;
+    }
     S9xMouseOn();
     GUI.MouseButtons |= 2;
     break;
   case WM_RBUTTONUP:
+    if (GUI.borderlessDragging) {
+      ReleaseCapture();
+      GUI.borderlessDragging = false;
+      return 0;
+    }
     S9xMouseOn();
     GUI.MouseButtons &= ~2;
     if (GUI.ControllerOption == SNES_JUSTIFIER ||
@@ -9527,7 +9615,7 @@ static hotkey_dialog_item hotkey_dialog_items
             {&CustomKeys.CheatEditorDialog, HOTKEYS_CHEAT_EDITOR_DIALOG},
             {&CustomKeys.CheatSearchDialog, HOTKEYS_CHEAT_SEARCH_DIALOG},
             {&CustomKeys.SaveROM, HOTKEYS_SAVE_ROM},
-            {NULL, _T("")},
+            {&CustomKeys.BorderlessWindow, HOTKEYS_BORDERLESS_WINDOW},
             {NULL, _T("")},
             {NULL, _T("")},
             {NULL, _T("")},
@@ -12310,4 +12398,43 @@ void WinSaveROM() {
       }
     }
   }
+}
+
+INT_PTR CALLBACK DlgTextConfig(HWND hDlg, UINT msg, WPARAM wParam,
+                               LPARAM /*lParam*/) {
+  switch (msg) {
+  case WM_INITDIALOG: {
+    CheckDlgButton(hDlg, IDC_ZSNES_TEXT,
+                   Settings.UseZSNESFont ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(hDlg, IDC_FORCE_TEXT_COLOR,
+                   Settings.ForceTextColor ? BST_CHECKED : BST_UNCHECKED);
+    char buf[16];
+    sprintf(buf, "%06X", Settings.ForcedTextColorRGB & 0xFFFFFF);
+    SetDlgItemTextA(hDlg, IDC_FORCED_TEXT_COLOR, buf);
+    sprintf(buf, "%06X", Settings.OutlineColorRGB & 0xFFFFFF);
+    SetDlgItemTextA(hDlg, IDC_OUTLINE_COLOR, buf);
+    return TRUE;
+  }
+  case WM_COMMAND:
+    switch (LOWORD(wParam)) {
+    case IDOK: {
+      Settings.UseZSNESFont =
+          (IsDlgButtonChecked(hDlg, IDC_ZSNES_TEXT) == BST_CHECKED);
+      Settings.ForceTextColor =
+          (IsDlgButtonChecked(hDlg, IDC_FORCE_TEXT_COLOR) == BST_CHECKED);
+      char buf[16];
+      GetDlgItemTextA(hDlg, IDC_FORCED_TEXT_COLOR, buf, sizeof(buf));
+      Settings.ForcedTextColorRGB = strtoul(buf, NULL, 16) & 0xFFFFFF;
+      GetDlgItemTextA(hDlg, IDC_OUTLINE_COLOR, buf, sizeof(buf));
+      Settings.OutlineColorRGB = strtoul(buf, NULL, 16) & 0xFFFFFF;
+      EndDialog(hDlg, IDOK);
+      return TRUE;
+    }
+    case IDCANCEL:
+      EndDialog(hDlg, IDCANCEL);
+      return TRUE;
+    }
+    break;
+  }
+  return FALSE;
 }

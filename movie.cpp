@@ -17,6 +17,7 @@
 #include "snapshot.h"
 #include "movie.h"
 #include "language.h"
+#include "display.h"
 #ifdef NETPLAY_SUPPORT
 #include "netplay.h"
 #endif
@@ -900,7 +901,10 @@ void S9xMovieUpdate (bool addFrame)
 			if (Movie.CurrentFrame >= Movie.MaxFrame || Movie.CurrentSample >= Movie.MaxSample)
 			{
 				change_state(MOVIE_STATE_NONE);
-				S9xMessage(S9X_INFO, S9X_MOVIE_INFO, MOVIE_INFO_END);
+				if (Settings.UseZSNESFont)
+					S9xSetInfoStringLarge("MOVIE FINISHED.");
+				else
+					S9xMessage(S9X_INFO, S9X_MOVIE_INFO, MOVIE_INFO_END);
 				return;
 			}
 			else

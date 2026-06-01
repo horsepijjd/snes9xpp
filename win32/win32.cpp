@@ -234,16 +234,25 @@ bool8 S9xOpenSnapshotFile( const char *fname, bool8 read_only, STREAM *file)
         FILE *fs = fopen (filename, "rb");
         if (fs)
         {
-            sprintf (String, "Freeze file \"%s\" exists but is read only",
-                     filename);
+            if (Settings.UseZSNESFont)
+                S9xSetInfoStringLarge("UNABLE TO SAVE.");
+            else
+            {
+                sprintf (String, "Freeze file \"%s\" exists but is read only",
+                         filename);
+                S9xMessage (S9X_ERROR, S9X_FREEZE_FILE_NOT_FOUND, String);
+            }
             fclose (fs);
-            S9xMessage (S9X_ERROR, S9X_FREEZE_FILE_NOT_FOUND, String);
         }
         else
         {
-            sprintf (String, "Cannot create freeze file \"%s\". Directory is read-only or does not exist.", filename);
-
-            S9xMessage (S9X_ERROR, S9X_FREEZE_FILE_NOT_FOUND, String);
+            if (Settings.UseZSNESFont)
+                S9xSetInfoStringLarge("UNABLE TO SAVE.");
+            else
+            {
+                sprintf (String, "Cannot create freeze file \"%s\". Directory is read-only or does not exist.", filename);
+                S9xMessage (S9X_ERROR, S9X_FREEZE_FILE_NOT_FOUND, String);
+            }
         }
     }
     return (FALSE);

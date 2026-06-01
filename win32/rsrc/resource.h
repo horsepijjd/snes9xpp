@@ -574,6 +574,15 @@
 #define ID_CHEAT_OLDFORMAT 40193
 #define ID_FILE_SAVE_ROM 40194
 
+// Text Configuration
+#define ID_VIDEO_TEXTCONFIG 40195
+#define IDD_TEXTCONFIG 170
+#define IDC_FORCE_TEXT_COLOR 3053
+#define IDC_FORCED_TEXT_COLOR 3054
+#define IDC_OUTLINE_COLOR 3055
+#define IDC_ZSNES_TEXT 3056
+#define IDC_KAILLERA_CLIENT_COMPAT 3057
+
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED

@@ -260,6 +260,10 @@ struct SSettings
 	uint16	DisplayColor;
 	bool8	BilinearFilter;
 	bool	ShowOverscan;
+	bool8	UseZSNESFont;
+	bool8	ForceTextColor;
+	uint32	ForcedTextColorRGB;
+	uint32	OutlineColorRGB;
 
 	bool8	Multi;
 	char	CartAName[PATH_MAX + 1];

@@ -24,6 +24,7 @@ void SwitchToGDI();
 void SaveMainWinPos();
 void RestoreMainWinPos();
 void ToggleFullScreen ();
+void ToggleBorderlessWindow();
 void RestoreGUIDisplay ();
 void RestoreSNESDisplay ();
 void WinChangeWindowSize(unsigned int newWidth, unsigned int newHeight);

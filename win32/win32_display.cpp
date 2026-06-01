@@ -605,6 +605,42 @@ void ToggleFullScreen ()
 	S9xClearPause (PAUSE_TOGGLE_FULL_SCREEN);
 }
 
+/*  ToggleBorderlessWindow
+    Toggles borderless window mode: removes title bar, menu, and borders
+    without changing the window size or going fullscreen.
+*/
+void ToggleBorderlessWindow()
+{
+	if (GUI.FullScreen || GUI.EmulatedFullscreen)
+		return; // don't toggle while in actual fullscreen
+
+	GUI.BorderlessWindowActive = !GUI.BorderlessWindowActive;
+
+	if (GUI.BorderlessWindowActive)
+	{
+		SaveMainWinPos();
+		if (GetMenu(GUI.hWnd) != NULL)
+			SetMenu(GUI.hWnd, NULL);
+		SetWindowLongPtr(GUI.hWnd, GWL_STYLE, WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+		SetWindowLongPtr(GUI.hWnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
+		// Reapply position and size (same client area, no frame)
+		RECT rc = GUI.window_size;
+		SetWindowPos(GUI.hWnd, HWND_NOTOPMOST, rc.left, rc.top,
+		             rc.right - rc.left, rc.bottom - rc.top,
+		             SWP_DRAWFRAME | SWP_FRAMECHANGED);
+	}
+	else
+	{
+		SetWindowLongPtr(GUI.hWnd, GWL_STYLE, WS_POPUPWINDOW | WS_CAPTION |
+		                 WS_THICKFRAME | WS_VISIBLE | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+		SetWindowLongPtr(GUI.hWnd, GWL_EXSTYLE, WS_EX_ACCEPTFILES | WS_EX_APPWINDOW);
+		SetMenu(GUI.hWnd, GUI.hMenu);
+		SetWindowPos(GUI.hWnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+		             SWP_NOMOVE | SWP_NOSIZE | SWP_DRAWFRAME | SWP_FRAMECHANGED);
+		RestoreMainWinPos();
+	}
+}
+
 /*  S9xOpenSoundDevice
 ennumerates the available display modes of the currently selected output
 */

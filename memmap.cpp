@@ -2449,7 +2449,9 @@ void CMemory::InitROM (void)
 		 : "bad checksum"),
 		MapType(), Size(), KartContents(), Settings.PAL ? "PAL" : "NTSC", StaticRAMSize(), ROMId, ROMCRC32);
 
-	S9xMessage(S9X_INFO, S9X_ROM_INFO, GetMultilineROMInfo().c_str());
+	S9xMessage(S9X_INFO, S9X_ROM_INFO,
+	           Settings.UseZSNESFont ? GetZSNESROMInfo().c_str()
+	                                 : GetMultilineROMInfo().c_str());
 
 	Settings.ForceLoROM = FALSE;
 	Settings.ForceHiROM = FALSE;
@@ -3405,6 +3407,80 @@ std::string CMemory::GetMultilineROMInfo()
        << ", v" << Memory.Revision();
 
 	return ss.str();
+}
+
+std::string CMemory::GetZSNESROMInfo()
+{
+	// Format ROM info in ZSNES style (3 lines):
+	// Line 1: <ROM NAME>                    TYPE:<chip>
+	// Line 2: INTERLEAVED:NO                CHKSUM:<OK/FAIL>
+	// Line 3: VIDEO:<PAL/NTSC>  BANK:<LO/HI>  CRC32:<hex>
+
+	bool8 isChecksumOK = (ROMChecksum + ROMComplementChecksum == 0xffff) &&
+	                     (ROMChecksum == CalculatedChecksum);
+
+	// Determine chip type in ZSNES style
+	const char *chipType = "NORMAL";
+	if (Settings.SA1)
+		chipType = "SA-1";
+	else if (Settings.SuperFX)
+		chipType = "SUPERFX";
+	else if (Settings.C4)
+		chipType = "C4";
+	else if (Settings.SDD1)
+		chipType = "S-DD1";
+	else if (Settings.SPC7110)
+		chipType = "SPC7110";
+	else if (Settings.SRTC)
+		chipType = "S-RTC";
+	else if (Settings.OBC1)
+		chipType = "OBC1";
+	else if (Settings.DSP)
+		chipType = "DSP";
+	else if (Settings.BS)
+		chipType = "BS";
+
+	char line1[80], line2[80], line3[80];
+
+	// Format matches ZSNES exactly:
+	// "SUPER TENNIS              TYPE:NORMAL"
+	// "INTERLEAVED:No               CHKSUM:OK"
+	// "VIDEO:PAL     BANK:Lo     CRC32:CDB03BFB"
+
+	// Build right-side portions first
+	char right1[32], right2[32], right3[32];
+	snprintf(right1, sizeof(right1), "TYPE:%s", chipType);
+	snprintf(right2, sizeof(right2), "CHKSUM:%s", isChecksumOK ? "OK" : "FAIL");
+	snprintf(right3, sizeof(right3), "CRC32:%08X", ROMCRC32);
+
+	// Build left-side portions
+	char left1[32], left2[32], left3[32];
+	snprintf(left1, sizeof(left1), "%s", SafeString(ROMName).c_str());
+	snprintf(left2, sizeof(left2), "INTERLEAVED:No");
+	snprintf(left3, sizeof(left3), "VIDEO:%-4s BANK:%s",
+	         Settings.PAL ? "PAL " : "NTSC",
+	         HiROM ? "Hi" : "Lo");
+
+	// Compose lines: left-justify left part, right-justify right part
+	// to a total width that fits the SNES screen (~42 chars at 6px each)
+	const int line_width = 40;
+	int pad1 = line_width - (int)strlen(left1) - (int)strlen(right1);
+	int pad2 = line_width - (int)strlen(left2) - (int)strlen(right2);
+	int pad3 = line_width - (int)strlen(left3) - (int)strlen(right3);
+	if (pad1 < 1) pad1 = 1;
+	if (pad2 < 1) pad2 = 1;
+	if (pad3 < 1) pad3 = 1;
+
+	snprintf(line1, sizeof(line1), "%s%*s%s", left1, pad1, "", right1);
+	snprintf(line2, sizeof(line2), "%s%*s%s", left2, pad2, "", right2);
+	snprintf(line3, sizeof(line3), "%s%*s%s", left3, pad3, "", right3);
+
+	std::string result = line1;
+	result += "\n";
+	result += line2;
+	result += "\n";
+	result += line3;
+	return result;
 }
 
 void CMemory::MakeRomInfoText (char *romtext)

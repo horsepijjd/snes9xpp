@@ -1047,6 +1047,40 @@ bool8 S9xFreezeGame (const char *filename)
 		auto base = S9xBasename(filename);
 		if (S9xMovieActive())
 			sprintf(String, MOVIE_INFO_SNAPSHOT " %s", base.c_str());
+		else if (Settings.UseZSNESFont)
+		{
+			auto path = splitpath(filename);
+			int slot = 0;
+			bool useFilename = false;
+			
+			if (path.ext.size() > 1)
+			{
+				slot = atoi(path.ext.c_str() + 1);
+				
+				// If atoi returns 0 AND extension contains non-zero characters, use full filename
+				if (slot == 0)
+				{
+					bool hasNonZero = false;
+					for (size_t i = 1; i < path.ext.size(); i++)
+					{
+						if (path.ext[i] != '0')
+						{
+							hasNonZero = true;
+							break;
+						}
+					}
+					useFilename = hasNonZero;
+				}
+			}
+			
+			if (useFilename)
+				sprintf(String, "STATE %s SAVED.", path.stem.c_str());
+			else
+				sprintf(String, "STATE %d SAVED.", slot);
+			
+			S9xSetInfoStringLarge(String);
+			return (TRUE);
+		}
 		else
 			sprintf(String, SAVE_INFO_SNAPSHOT " %s", base.c_str());
 
@@ -1126,6 +1160,40 @@ bool8 S9xUnfreezeGame (const char *filename)
 			else
 				sprintf(String, MOVIE_INFO_RERECORD " %s", base.c_str());
 		}
+		else if (Settings.UseZSNESFont)
+		{
+			auto path2 = splitpath(filename);
+			int slot = 0;
+			bool useFilename = false;
+			
+			if (path2.ext.size() > 1)
+			{
+				slot = atoi(path2.ext.c_str() + 1);
+				
+				// If atoi returns 0 AND extension contains non-zero characters, use full filename
+				if (slot == 0)
+				{
+					bool hasNonZero = false;
+					for (size_t i = 1; i < path2.ext.size(); i++)
+					{
+						if (path2.ext[i] != '0')
+						{
+							hasNonZero = true;
+							break;
+						}
+					}
+					useFilename = hasNonZero;
+				}
+			}
+			
+			if (useFilename)
+				sprintf(String, "STATE %s LOADED.", path2.stem.c_str());
+			else
+				sprintf(String, "STATE %d LOADED.", slot);
+			
+			S9xSetInfoStringLarge(String);
+			return (TRUE);
+		}
 		else
 			sprintf(String, SAVE_INFO_LOAD " %s", base.c_str());
 
@@ -1134,8 +1202,44 @@ bool8 S9xUnfreezeGame (const char *filename)
 		return (TRUE);
 	}
 
-	sprintf(String, SAVE_ERR_SAVE_NOT_FOUND, base.c_str());
-	S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
+	if (Settings.UseZSNESFont)
+	{
+		auto path3 = splitpath(filename);
+		int slot = 0;
+		bool useFilename = false;
+		
+		if (path3.ext.size() > 1)
+		{
+			slot = atoi(path3.ext.c_str() + 1);
+			
+			// If atoi returns 0 AND extension contains non-zero characters, use full filename
+			if (slot == 0)
+			{
+				bool hasNonZero = false;
+				for (size_t i = 1; i < path3.ext.size(); i++)
+				{
+					if (path3.ext[i] != '0')
+					{
+						hasNonZero = true;
+						break;
+					}
+				}
+				useFilename = hasNonZero;
+			}
+		}
+		
+		if (useFilename)
+			sprintf(String, "UNABLE TO LOAD STATE %s.", path3.stem.c_str());
+		else
+			sprintf(String, "UNABLE TO LOAD STATE %d.", slot);
+		
+		S9xSetInfoStringLarge(String);
+	}
+	else
+	{
+		sprintf(String, SAVE_ERR_SAVE_NOT_FOUND, base.c_str());
+		S9xMessage(S9X_INFO, S9X_FREEZE_FILE_INFO, String);
+	}
 
 	return (FALSE);
 }
