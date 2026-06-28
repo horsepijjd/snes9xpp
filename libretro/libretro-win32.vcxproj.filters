@@ -206,6 +206,9 @@
     <ClCompile Include="..\cheats2.cpp">
       <Filter>s9x-source</Filter>
     </ClCompile>
+    <ClCompile Include="..\chat.cpp">
+      <Filter>s9x-source</Filter>
+    </ClCompile>
     <ClCompile Include="..\clip.cpp">
       <Filter>s9x-source</Filter>
     </ClCompile>

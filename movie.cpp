@@ -16,6 +16,7 @@
 #include "controls.h"
 #include "snapshot.h"
 #include "movie.h"
+#include "chat.h"
 #include "language.h"
 #include "display.h"
 #ifdef NETPLAY_SUPPORT
@@ -559,6 +560,7 @@ int S9xMovieUnfreeze (uint8 *buf, uint32 size)
 	if (!Movie.ReadOnly)
 	{
 		change_state(MOVIE_STATE_RECORD);
+		S9xChatOpenForRecord(Movie.Filename);
 
 		Movie.CurrentFrame  = current_frame;
 		Movie.MaxFrame      = max_frame;
@@ -581,6 +583,7 @@ int S9xMovieUnfreeze (uint8 *buf, uint32 size)
 			return (SNAPSHOT_INCONSISTENT);
 
 		change_state(MOVIE_STATE_PLAY);
+		S9xChatOpenForPlayback(Movie.Filename);
 
 		Movie.CurrentFrame  = current_frame;
 		Movie.CurrentSample = current_sample;
@@ -608,6 +611,7 @@ int S9xMovieOpen (const char *filename, bool8 read_only)
 	}
 
 	change_state(MOVIE_STATE_NONE);
+	S9xChatClose();
 
 	result = read_movie_header(fd, &Movie);
 	if (result != SUCCESS)
@@ -703,6 +707,7 @@ int S9xMovieOpen (const char *filename, bool8 read_only)
 
 	change_state(MOVIE_STATE_PLAY);
 
+	S9xChatOpenForPlayback(filename);
 	S9xUpdateFrameCounter(-1);
 
 	S9xMessage(S9X_INFO, S9X_MOVIE_INFO, MOVIE_INFO_REPLAY);
@@ -725,6 +730,7 @@ int S9xMovieCreate (const char *filename, uint8 controllers_mask, uint8 opts, co
 		metadata_length = MOVIE_MAX_METADATA;
 
 	change_state(MOVIE_STATE_NONE);
+	S9xChatClose();
 
 	store_previous_settings();
 	store_movie_settings();
@@ -819,6 +825,7 @@ int S9xMovieCreate (const char *filename, uint8 controllers_mask, uint8 opts, co
 
 	change_state(MOVIE_STATE_RECORD);
 
+	S9xChatOpenForRecord(filename);
 	S9xUpdateFrameCounter(-1);
 
 	S9xMessage(S9X_INFO, S9X_MOVIE_INFO, MOVIE_INFO_RECORD);
@@ -901,6 +908,7 @@ void S9xMovieUpdate (bool addFrame)
 			if (Movie.CurrentFrame >= Movie.MaxFrame || Movie.CurrentSample >= Movie.MaxSample)
 			{
 				change_state(MOVIE_STATE_NONE);
+				S9xChatClose();
 				if (Settings.UseZSNESFont)
 					S9xSetInfoStringLarge("MOVIE FINISHED.");
 				else
@@ -918,7 +926,10 @@ void S9xMovieUpdate (bool addFrame)
 				read_frame_controller_data(addFrame);
 				Movie.CurrentSample++;
 				if (addFrame)
+				{
 					Movie.CurrentFrame++;
+					S9xChatUpdate();
+				}
 			}
 
 			break;
@@ -979,6 +990,10 @@ void S9xMovieStop (bool8 suppress_message)
 	if (Movie.State != MOVIE_STATE_NONE)
 	{
 		change_state(MOVIE_STATE_NONE);
+		S9xChatClose();
+#ifdef __WIN32__
+		S9xChatInputClose();
+#endif
 
 		if (!suppress_message)
 			S9xMessage(S9X_INFO, S9X_MOVIE_INFO, MOVIE_INFO_STOP);

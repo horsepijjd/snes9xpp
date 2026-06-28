@@ -51,6 +51,9 @@
     <ClCompile Include="..\..\..\cheats2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\chat.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\clip.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

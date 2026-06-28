@@ -14,6 +14,7 @@
 #include "../display.h"
 #include "../gfx.h"
 #include "../movie.h"
+#include "../chat.h"
 #include "../netplay.h"
 #include "kaillera.h"
 
@@ -509,8 +510,13 @@ bool S9xGetState (WORD KeyIdent)
 	if(!GUI.BackgroundInput && GUI.hWnd != GetForegroundWindow())
 		return true;
 
-	if (!(KeyIdent & 0x8000) && (S9xKailleraWantsKeyboardCapture() || S9xNPChatWantsKeyboardCapture()))
-		return true;
+	if (!(KeyIdent & 0x8000)) {
+		if (KeyIdent == VK_RETURN &&
+		    (S9xKailleraShouldSuppressEnter() || S9xChatInputShouldSuppressEnter()))
+			return true;
+		if (S9xKailleraWantsKeyboardCapture() || S9xChatInputWantsKeyboardCapture())
+			return true;
+	}
 
     if (KeyIdent & 0x8000) // if it's a joystick 'key':
     {

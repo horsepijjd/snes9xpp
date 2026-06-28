@@ -43,6 +43,7 @@
 #include "../apu/apu.h"
 #include "kaillera.h"
 #include "../movie.h"
+#include "../chat.h"
 #include "../controls.h"
 #include "../conffile.h"
 #include "../statemanager.h"
@@ -203,13 +204,13 @@ struct SJoypad Joypad[16] = {
         'A', 'S'             /* L R */
     },
     {
-        true,               /* Joypad 2 enabled */
-        'J', 'L', 'I', 'K', /* Left, Right, Up, Down */
-        0, 0, 0, 0,         /* Left_Up, Left_Down, Right_Up, Right_Down */
-        'P', 'O',           /* Start, Select */
-        'H', 'G',           /* A B */
-        'T', 'F',           /* X Y */
-        'Y', 'U'            /* L R */
+      true,                              /* Joypad 2 enabled */
+      'K', 0xBA, 'O', 'L',               /* Left, Right(semicolon), Up, Down */
+      0, 0, 0, 0,                        /* Left_Up, Left_Down, Right_Up, Right_Down */
+      0xDB, 0xDD,                        /* Start([), Select(]) */
+      'G', 'Y',                          /* A, B */
+      'J', 'H',                          /* X, Y */
+      'I', 'P'                           /* L, R */
     },
     {false, /* Joypad 3 disabled */
      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -347,7 +348,7 @@ struct SCustomKeys CustomKeys = {
     {0, 0},                                      // Load File Select
     {0, 0},                                      // Mute
     {0, 0},                                      // Aspect ratio
-    {0, 0},                                      // Kaillera chat
+    {'T', 0},                                   // Kaillera chat
     {'G', CUSTKEY_ALT_MASK},                     // Cheat Editor Dialog
     {'A', CUSTKEY_ALT_MASK},                     // Cheat Search Dialog
 };
@@ -929,9 +930,12 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
     return 0;
   }
 
-  if ((S9xKailleraWantsKeyboardCapture() || S9xNPChatWantsKeyboardCapture()) &&
-      !(wParam & 0x8000)) {
-    return 0;
+  if (!(wParam & 0x8000)) {
+    if (wParam == VK_RETURN &&
+        (S9xKailleraShouldSuppressEnter() || S9xChatInputShouldSuppressEnter()))
+      return 0;
+    if (S9xKailleraWantsKeyboardCapture() || S9xChatInputWantsKeyboardCapture())
+      return 0;
   }
 
   if (!(wParam == 0 || wParam == VK_ESCAPE)) // if it's the 'disabled' key, it's
@@ -1320,7 +1324,7 @@ int HandleKeyMessage(WPARAM wParam, LPARAM lParam) {
       bool swallow_char =
           !(modifiers & (CUSTKEY_CTRL_MASK | CUSTKEY_ALT_MASK)) &&
           ((MapVirtualKey((UINT)wParam, MAPVK_VK_TO_CHAR) & 0x7fff) != 0);
-      if (S9xKailleraOpenChat(swallow_char) || S9xNPChatOpen(swallow_char)) {
+      if (S9xKailleraOpenChat(swallow_char) || S9xChatInputOpen(swallow_char)) {
         hitHotKey = true;
       }
     }
@@ -1685,7 +1689,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_KEYDOWN:
     if (S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
-    if (S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+    if (S9xChatInputHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
     if (GUI.BackgroundInput && !GUI.InactivePause)
       break;
@@ -1693,7 +1697,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_SYSKEYDOWN: {
     if (S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
-    if (S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+    if (S9xChatInputHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
     if (!HandleKeyMessage(wParam, lParam))
       return 0;
@@ -1705,10 +1709,10 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_CUSTKEYUP: {
     if (S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
-    if (S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+    if (S9xChatInputHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
     if ((S9xKailleraWantsKeyboardCapture() ||
-         S9xNPChatWantsKeyboardCapture()) &&
+         S9xChatInputWantsKeyboardCapture()) &&
         !(wParam & 0x8000))
       return 0;
     int modifiers = 0;
@@ -1738,7 +1742,7 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_SYSCHAR:
     if (S9xKailleraHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
-    if (S9xNPChatHandleKeyboardMessage(uMsg, wParam, lParam))
+    if (S9xChatInputHandleKeyboardMessage(uMsg, wParam, lParam))
       return 0;
     break;
 
@@ -1824,6 +1828,9 @@ LRESULT CALLBACK WinProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     case ID_FILE_MOVIE_ENABLERECORDING:
       GUI.MovieRecordOnLoad = !GUI.MovieRecordOnLoad;
+      break;
+    case ID_FILE_AUTOSAVE_SRAM:
+      GUI.BlockSRAMSave = !GUI.BlockSRAMSave;
       break;
     case ID_FILE_MOVIE_PLAY: {
       RestoreGUIDisplay(); // exit DirectX
@@ -4214,6 +4221,9 @@ static void CheckMenuStates() {
 
   mii.fState = GUI.MovieRecordOnLoad ? MFS_CHECKED : MFS_UNCHECKED;
   SetMenuItemInfo(GUI.hMenu, ID_FILE_MOVIE_ENABLERECORDING, FALSE, &mii);
+
+  mii.fState = !GUI.BlockSRAMSave ? MFS_CHECKED : MFS_UNCHECKED;
+  SetMenuItemInfo(GUI.hMenu, ID_FILE_AUTOSAVE_SRAM, FALSE, &mii);
 
   mii.fState =
       (GUI.SoundChannelEnable & (1 << 0)) ? MFS_CHECKED : MFS_UNCHECKED;

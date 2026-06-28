@@ -254,6 +254,8 @@ void S9xLoadConfigFiles (char **argv, int argc)
 	Settings.MovieTruncate              =  conf.GetBool("Settings::MovieTruncateAtEnd",        false);
 	Settings.MovieNotifyIgnored         =  conf.GetBool("Settings::MovieNotifyIgnored",        false);
 	Settings.WrongMovieStateProtection  =  conf.GetBool("Settings::WrongMovieStateProtection", true);
+	Settings.ChatRecordEnabled          =  conf.GetBool("Settings::ChatRecordEnabled",          false);
+	Settings.ChatPlaybackEnabled        =  conf.GetBool("Settings::ChatPlaybackEnabled",        true);
 	Settings.StretchScreenshots         =  conf.GetInt ("Settings::StretchScreenshots",        1);
 	Settings.SnapshotScreenshots        =  conf.GetBool("Settings::SnapshotScreenshots",       true);
 	Settings.DontSaveOopsSnapshot       =  conf.GetBool("Settings::DontSaveOopsSnapshot",      false);

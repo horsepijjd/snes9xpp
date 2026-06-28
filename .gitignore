@@ -24,6 +24,7 @@ win32/BIOS
 *.cg
 *.cgp
 *.smv
+*.chat
 *.cht
 *.rtc
 

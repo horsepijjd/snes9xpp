@@ -57,6 +57,7 @@
 #include "snapshot.h"
 #include "display.h"
 #include "movie.h"
+#include "chat.h"
 #include <string>
 #include <vector>
 
@@ -71,12 +72,6 @@ static void S9xNPFormatChatLine(char *buffer, size_t size, int player,
                                 const char *message);
 
 #ifdef __WIN32__
-static void S9xNPCloseChatInput(void);
-static void S9xNPRefreshChatInputOSD(void);
-static void S9xNPBackspaceChatInput(void);
-static bool S9xNPAppendChatInputChar(WPARAM wParam);
-static bool S9xNPMessageHasContent(const std::string &message);
-
 static int S9xNPClientPlayerCount(void) {
   int count = 0;
 
@@ -297,6 +292,7 @@ bool8 S9xNPConnectToServer(const char *hostname, int port,
   NetPlay.ROMName = strdup(rom_name);
   NetPlay.Port = port;
   NetPlay.PendingWait4Sync = FALSE;
+  NetPlay.ChatActive = FALSE;
   memset((void *)NetPlay.ClientNames, 0, sizeof(NetPlay.ClientNames));
 
 #ifdef __WIN32__
@@ -526,8 +522,11 @@ version of the protocol. Disconnecting.");
 #endif
   S9xNPSetAction("Sending 'READY' to the server...");
 
-  return (S9xNPSendReady((header[2] & 0x80) ? NP_CLNT_WAITING_FOR_ROM_IMAGE
-                                            : NP_CLNT_READY));
+  bool8 ready = S9xNPSendReady((header[2] & 0x80) ? NP_CLNT_WAITING_FOR_ROM_IMAGE
+                                                  : NP_CLNT_READY);
+  if (ready)
+    NetPlay.ChatActive = TRUE;
+  return ready;
 }
 
 bool8 S9xNPSendReady(uint8 op) {
@@ -595,6 +594,8 @@ bool8 S9xNPSendChat(const char *message) {
     S9xNPDisconnect();
     return FALSE;
   }
+
+  S9xChatWrite(NetPlay.Player, S9xNPClientDisplayName(NetPlay.Player), message);
 
   delete[] data;
   return TRUE;
@@ -888,6 +889,8 @@ bool8 S9xNPWaitForHeartBeat() {
 
         char line[NP_MAX_CHAT_MESSAGE_LEN + sizeof(NetPlay.ClientNames[0]) + 4];
         S9xNPFormatChatLine(line, sizeof(line), player, message);
+        if (player != NetPlay.Player)
+          S9xChatWrite((uint8)player, S9xNPClientDisplayName(player), message);
         S9xNPDisplayChatMessage(line);
         delete[] chat;
         break;
@@ -1300,7 +1303,8 @@ static const char *S9xNPClientDisplayName(int player) {
 static void S9xNPFormatChatLine(char *buffer, size_t size, int player,
                                 const char *message) {
   const char *name = S9xNPClientDisplayName(player);
-  snprintf(buffer, size, "%s: %s", name, message ? message : "");
+  const char *separator = Settings.UseZSNESFont ? ">" : ": ";
+  snprintf(buffer, size, "%s%s%s", name, separator, message ? message : "");
   buffer[size - 1] = '\0';
 }
 
@@ -1360,12 +1364,13 @@ void S9xNPDisconnect() {
   close(NetPlay.Socket);
   NetPlay.Socket = -1;
   NetPlay.Connected = FALSE;
+  NetPlay.ChatActive = FALSE;
   Settings.NetPlay = FALSE;
   memset((void *)NetPlay.ClientNames, 0, sizeof(NetPlay.ClientNames));
 #ifdef __WIN32__
   if (was_connected && KailleraConfig.AutoStopMovieOnEnd)
     S9xNPStopMovie();
-  S9xNPCloseChatInput();
+  S9xChatInputClose();
 #endif
 }
 
@@ -1575,71 +1580,14 @@ void S9xNPSetWarning(const char *warning) {
 }
 
 #ifdef __WIN32__
-static bool np_chat_input_active = false;
-static DWORD np_chat_input_swallow_until_tick = 0;
-static std::string np_chat_input_text;
-
-static void S9xNPCloseChatInput(void) {
-  np_chat_input_active = false;
-  np_chat_input_swallow_until_tick = 0;
-  np_chat_input_text.clear();
-  S9xSetInfoString(" ");
-}
-
-static void S9xNPRefreshChatInputOSD(void) {
-  if (!np_chat_input_active)
-    return;
-
-  char buf[512];
-  const char *cursor = ((GetTickCount() / 400) & 1) ? "_" : " ";
-  snprintf(buf, sizeof(buf), ">%s%s", np_chat_input_text.c_str(), cursor);
-  buf[sizeof(buf) - 1] = '\0';
-  S9xSetInfoString(buf);
-}
-
-static void S9xNPBackspaceChatInput(void) {
-  if (!np_chat_input_text.empty())
-    np_chat_input_text.erase(np_chat_input_text.size() - 1);
-}
-
-static bool S9xNPAppendChatInputChar(WPARAM wParam) {
-  if (wParam < 0x20 || wParam == 0x7f)
-    return false;
-
-#ifdef UNICODE
-  wchar_t wide[2] = {(wchar_t)wParam, 0};
-  char mb[8] = {};
-
-  int count =
-      WideCharToMultiByte(CP_ACP, 0, wide, 1, mb, sizeof(mb), NULL, NULL);
-  if (count <= 0)
-    return false;
-  if (np_chat_input_text.size() + (size_t)count > NP_MAX_CHAT_MESSAGE_LEN)
-    return false;
-  np_chat_input_text.append(mb, (size_t)count);
-  return true;
-#else
-  if (np_chat_input_text.size() >= NP_MAX_CHAT_MESSAGE_LEN)
-    return false;
-  np_chat_input_text.push_back((char)wParam);
-  return true;
-#endif
-}
-
-static bool S9xNPMessageHasContent(const std::string &message) {
-  for (size_t i = 0; i < message.size(); i++) {
-    unsigned char ch = (unsigned char)message[i];
-    if (ch > ' ')
-      return true;
-  }
-  return false;
-}
-
 LRESULT S9xNPHandleUiMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
   if (msg == WM_NETPLAY_CHAT) {
     char *text = (char *)lParam;
     if (text) {
-      S9xSetInfoString(text);
+      if (Settings.UseZSNESFont)
+        S9xSetInfoStringChat(text);
+      else
+        S9xSetInfoString(text);
       free(text);
     }
     return 0;
@@ -1650,72 +1598,6 @@ LRESULT S9xNPHandleUiMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
   }
   return 0;
-}
-
-bool S9xNPChatOpen(bool swallow_char) {
-  if (!Settings.NetPlay || !NetPlay.Connected)
-    return false;
-
-  np_chat_input_active = true;
-  np_chat_input_text.clear();
-  np_chat_input_swallow_until_tick = swallow_char ? 1 : 0;
-  S9xNPRefreshChatInputOSD();
-  return true;
-}
-
-bool S9xNPChatWantsKeyboardCapture(void) {
-  return Settings.NetPlay && NetPlay.Connected && np_chat_input_active;
-}
-
-bool S9xNPChatHandleKeyboardMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
-  if (!S9xNPChatWantsKeyboardCapture())
-    return false;
-
-  switch (msg) {
-  case WM_KEYDOWN:
-  case WM_SYSKEYDOWN:
-    if (wParam == VK_RETURN) {
-      std::string message = np_chat_input_text;
-      S9xNPCloseChatInput();
-      if (S9xNPMessageHasContent(message) && !S9xNPSendChat(message.c_str()))
-        S9xSetInfoString("Netplay: chat send failed.");
-      return true;
-    }
-    if (wParam == VK_ESCAPE) {
-      S9xNPCloseChatInput();
-      return true;
-    }
-    if (wParam == VK_BACK) {
-      S9xNPBackspaceChatInput();
-      S9xNPRefreshChatInputOSD();
-      return true;
-    }
-    if (wParam == VK_DELETE) {
-      np_chat_input_text.clear();
-      S9xNPRefreshChatInputOSD();
-      return true;
-    }
-    return true;
-
-  case WM_KEYUP:
-  case WM_SYSKEYUP:
-    return true;
-
-  case WM_CHAR:
-  case WM_SYSCHAR:
-    if (np_chat_input_swallow_until_tick != 0) {
-      np_chat_input_swallow_until_tick = 0;
-      return true;
-    }
-    np_chat_input_swallow_until_tick = 0;
-    if (wParam == '\r' || wParam == '\b' || wParam == 27)
-      return true;
-    if (S9xNPAppendChatInputChar(wParam))
-      S9xNPRefreshChatInputOSD();
-    return true;
-  }
-
-  return false;
 }
 #endif
 #endif

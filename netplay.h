@@ -131,6 +131,7 @@ struct SNetPlay
     volatile bool8  ClientsPaused [NP_MAX_CLIENTS];
     volatile bool8  Paused;
     volatile bool8  PendingWait4Sync;
+    volatile bool8  ChatActive;
     volatile uint8  PercentageComplete;
     volatile bool8  Waiting4EmulationThread;
     volatile bool8  Answer;
@@ -221,9 +222,6 @@ void S9xNPSendJoypadSwap ();
 #define WM_NETPLAY_CHAT (WM_USER + 12)
 #define WM_NETPLAY_STOP_MOVIE (WM_USER + 13)
 LRESULT S9xNPHandleUiMessage(UINT msg, WPARAM wParam, LPARAM lParam);
-bool S9xNPChatOpen(bool swallow_char);
-bool S9xNPChatWantsKeyboardCapture(void);
-bool S9xNPChatHandleKeyboardMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
 #ifdef __WIN32__
 #define S9xGetMilliTime timeGetTime

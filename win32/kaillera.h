@@ -147,6 +147,7 @@ LRESULT S9xKailleraHandleUiMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
 bool S9xKailleraOpenChat(bool swallow_char);
 bool S9xKailleraWantsKeyboardCapture(void);
+bool S9xKailleraShouldSuppressEnter(void);
 bool S9xKailleraHandleKeyboardMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
 /* Dialog procedure for the Kaillera Options dialog (IDD_KAILLERA_OPTIONS).  */

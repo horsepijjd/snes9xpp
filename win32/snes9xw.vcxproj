@@ -330,6 +330,7 @@
     <ClInclude Include="..\apu\bapu\snes\snes.hpp" />
     <CustomBuild Include="..\bsx.h" />
     <CustomBuild Include="..\c4.h" />
+    <CustomBuild Include="..\chat.h" />
     <CustomBuild Include="..\cheats.h" />
     <CustomBuild Include="..\conffile.h" />
     <CustomBuild Include="..\controls.h" />
@@ -500,6 +501,7 @@
     <ClCompile Include="..\apu\bapu\smp\smp.cpp" />
     <ClCompile Include="..\apu\bapu\smp\smp_state.cpp" />
     <ClCompile Include="..\bsx.cpp" />
+    <ClCompile Include="..\chat.cpp" />
     <ClCompile Include="..\c4.cpp" />
     <ClCompile Include="..\c4emu.cpp" />
     <ClCompile Include="..\cheats.cpp" />
@@ -651,6 +653,7 @@
     <ClCompile Include="image_functions.cpp" />
     <ClCompile Include="InputCustom.cpp" />
     <ClCompile Include="kaillera.cpp" />
+    <ClCompile Include="chat_input.cpp" />
     <ClCompile Include="render.cpp" />
     <ClCompile Include="wconfig.cpp" />
     <ClCompile Include="win32.cpp" />

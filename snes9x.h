@@ -295,6 +295,8 @@ struct SSettings
 	bool8	MovieTruncate;
 	bool8	MovieNotifyIgnored;
 	bool8	WrongMovieStateProtection;
+	bool8	ChatRecordEnabled;
+	bool8	ChatPlaybackEnabled;
 	bool8	DumpStreams;
 	int		DumpStreamsMaxFrames;
 

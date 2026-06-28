@@ -18,6 +18,7 @@
 #include "../apu/apu.h"
 #include "../snapshot.h"
 #include "../movie.h"
+#include "../chat.h"
 #include "../memmap.h"
 #include "../fscompat.h"
 #include "../stream.h"
@@ -247,6 +248,7 @@ struct KailleraRuntime {
   std::vector<uint8> pending_pv_state;
   bool pv_state_ready;
   bool chat_input_active;
+  bool chat_suppress_enter;
   DWORD chat_input_swallow_until_tick;
   std::string chat_input_text;
 
@@ -303,6 +305,7 @@ struct KailleraRuntime {
     pending_pv_state.clear();
     pv_state_ready = false;
     chat_input_active = false;
+    chat_suppress_enter = false;
     chat_input_swallow_until_tick = 0;
     chat_input_text.clear();
     memset(player_names, 0, sizeof(player_names));
@@ -328,7 +331,7 @@ struct KailleraRuntime {
         chat_sram_received_acks(0), chat_sram_id(0), chat_sram_offset(0),
         chat_sram_last_send_tick(0), startup_sram_pending(false),
         pv_state_ready(false), chat_input_active(false),
-        chat_input_swallow_until_tick(0) {
+        chat_suppress_enter(false), chat_input_swallow_until_tick(0) {
     memset(player_names, 0, sizeof(player_names));
     memset(player_name_known, 0, sizeof(player_name_known));
     memset(&infos, 0, sizeof(infos));
@@ -2062,6 +2065,18 @@ static void finalize_runtime_sync(void) {
 /* --------------------------------------------------------------------------
  * Kaillera callbacks (all run on the game-loop thread)
  * -------------------------------------------------------------------------- */
+static int player_for_chat_nick(const char *nick) {
+  if (!nick || !nick[0])
+    return 0;
+
+  for (int i = 0; i < rt.num_players && i < 8; i++) {
+    if (rt.player_names[i][0] && strcmp(rt.player_names[i], nick) == 0)
+      return i + 1;
+  }
+
+  return 0;
+}
+
 static void WINAPI chat_callback(char *nick, char *text) {
   if (!nick || !text)
     return;
@@ -2202,6 +2217,12 @@ static void WINAPI chat_callback(char *nick, char *text) {
   }
 
   /* Regular chat */
+  {
+    int player = player_for_chat_nick(nick);
+    if (player != rt.local_player)
+      S9xChatWrite((uint8)player, nick, text);
+  }
+
   if (KailleraConfig.ShowChatInOSD) {
     char buf[512];
     if (Settings.UseZSNESFont)
@@ -2428,6 +2449,16 @@ static int WINAPI game_callback(char *game, int player, int numplayers) {
   rt.startup_sram_pending = false;
   rt.startup_sram_data.clear();
 
+  std::string local_nick = ExtractKailleraNick();
+  size_t local_nlen = local_nick.size();
+  if (local_nlen > k_name_max)
+    local_nlen = k_name_max;
+  if (rt.local_player >= 1 && rt.local_player <= 8) {
+    memcpy(rt.player_names[rt.local_player - 1], local_nick.data(), local_nlen);
+    rt.player_names[rt.local_player - 1][local_nlen] = '\0';
+    rt.player_name_known[rt.local_player - 1] = true;
+  }
+
   rt.announce_frames = 0;
   stop_auto_movie();
 
@@ -2466,7 +2497,7 @@ static int WINAPI game_callback(char *game, int player, int numplayers) {
 
     // Extract local nickname and bundle directly into the startup sequence
     // payload natively
-    std::string nick = ExtractKailleraNick();
+    std::string nick = local_nick;
     uint8 nlen = (uint8)nick.length();
     if (nlen > k_name_max)
       nlen = k_name_max;
@@ -2898,9 +2929,39 @@ bool S9xKailleraWantsKeyboardCapture(void) {
   return rt.active && rt.chat_input_active;
 }
 
+bool S9xKailleraShouldSuppressEnter(void) {
+  return rt.active && rt.chat_suppress_enter;
+}
+
 bool S9xKailleraHandleKeyboardMessage(UINT msg, WPARAM wParam,
                                       LPARAM /*lParam*/) {
-  if (!rt.active || !rt.chat_input_active)
+  if (!rt.active)
+    return false;
+
+  if (rt.chat_suppress_enter && !rt.chat_input_active) {
+    switch (msg) {
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+      if (wParam == VK_RETURN)
+        return true;
+      return false;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+      if (wParam == VK_RETURN) {
+        rt.chat_suppress_enter = false;
+        return true;
+      }
+      return false;
+    case WM_CHAR:
+    case WM_SYSCHAR:
+      if (wParam == '\r')
+        return true;
+      return false;
+    }
+    return false;
+  }
+
+  if (!rt.chat_input_active)
     return false;
 
   switch (msg) {
@@ -2908,10 +2969,17 @@ bool S9xKailleraHandleKeyboardMessage(UINT msg, WPARAM wParam,
   case WM_SYSKEYDOWN:
     if (wParam == VK_RETURN) {
       std::string message = str_trim(rt.chat_input_text);
+      rt.chat_suppress_enter = true;
       close_chat_input();
-      if (!message.empty() && api.chatSend &&
-          api.chatSend(const_cast<char *>(message.c_str())) < 0)
-        post_status("Kaillera: chat send failed.");
+      if (!message.empty() && api.chatSend) {
+        int player = (rt.local_player >= 1 && rt.local_player <= 8) ? rt.local_player : 0;
+        const char *name = (player && rt.player_names[player - 1][0]) ?
+                           rt.player_names[player - 1] : NULL;
+        if (api.chatSend(const_cast<char *>(message.c_str())) < 0)
+          post_status("Kaillera: chat send failed.");
+        else
+          S9xChatWrite((uint8)player, name, message.c_str());
+      }
       return true;
     }
     if (wParam == VK_ESCAPE) {
@@ -2981,6 +3049,9 @@ INT_PTR CALLBACK DlgKailleraOptions(HWND hDlg, UINT msg, WPARAM wParam,
         hDlg, IDC_KAILLERA_CHAT_OSD, BM_SETCHECK,
         KailleraConfig.ShowChatInOSD ? BST_CHECKED : BST_UNCHECKED, 0);
     SendDlgItemMessage(
+        hDlg, IDC_KAILLERA_RECORD_CHAT, BM_SETCHECK,
+        Settings.ChatRecordEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendDlgItemMessage(
         hDlg, IDC_KAILLERA_AUTO_MOVIE, BM_SETCHECK,
         KailleraConfig.AutoRecordMovie ? BST_CHECKED : BST_UNCHECKED, 0);
     SendDlgItemMessage(
@@ -3006,6 +3077,8 @@ INT_PTR CALLBACK DlgKailleraOptions(HWND hDlg, UINT msg, WPARAM wParam,
           IsDlgButtonChecked(hDlg, IDC_KAILLERA_TRANSFER_SRAM) == BST_CHECKED;
       KailleraConfig.ShowChatInOSD =
           IsDlgButtonChecked(hDlg, IDC_KAILLERA_CHAT_OSD) == BST_CHECKED;
+      Settings.ChatRecordEnabled =
+          IsDlgButtonChecked(hDlg, IDC_KAILLERA_RECORD_CHAT) == BST_CHECKED;
       KailleraConfig.AutoRecordMovie =
           IsDlgButtonChecked(hDlg, IDC_KAILLERA_AUTO_MOVIE) == BST_CHECKED;
       KailleraConfig.AutoStopMovieOnEnd =

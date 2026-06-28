@@ -166,6 +166,7 @@
     <ClCompile Include="..\..\..\c4emu.cpp" />
     <ClCompile Include="..\..\..\cheats.cpp" />
     <ClCompile Include="..\..\..\cheats2.cpp" />
+    <ClCompile Include="..\..\..\chat.cpp" />
     <ClCompile Include="..\..\..\clip.cpp" />
     <ClCompile Include="..\..\..\conffile.cpp" />
     <ClCompile Include="..\..\..\controls.cpp" />

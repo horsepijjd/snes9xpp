@@ -123,6 +123,8 @@ void WinSetDefaultValues() {
   KailleraConfig.CaseSensitiveGameList = FALSE;
   KailleraConfig.UseSNESChecksumInGameList = FALSE;
 
+  Settings.ChatRecordEnabled = FALSE;
+  Settings.ChatPlaybackEnabled = TRUE;
   Settings.TakeScreenshot = false;
 
   GUI.Language = 0;
@@ -1309,7 +1311,7 @@ void WinRegisterConfigItems() {
 #undef CATEGORY
 #define CATEGORY "Display"
   AddBool2("Transparency", Settings.Transparency, true);
-  AddBoolC("MessagesInImage", Settings.AutoDisplayMessages, false,
+  AddBoolC("MessagesInImage", Settings.AutoDisplayMessages, true,
            "true to draw text inside the SNES image (will get into AVIs, "
            "screenshots, and filters)");
   AddBool2C("FrameRate", Settings.DisplayFrameRate, false,
@@ -1451,6 +1453,11 @@ void WinRegisterConfigItems() {
             true,
             "off to allow states to be loaded for recording from a different "
             "movie than they were made in");
+  AddBoolC("ChatRecordEnabled", Settings.ChatRecordEnabled, true,
+           "true to save netplay/Kaillera chat to a .chat file alongside SMV "
+           "movie recordings");
+  AddBoolC("ChatPlaybackEnabled", Settings.ChatPlaybackEnabled, true,
+           "true to display matching .chat files during SMV movie playback");
   AddUIntC("MessageDisplayTime", Settings.InitialInfoStringTimeout, 120,
            "display length of messages, in frames. set to 0 to disable all "
            "message text");

@@ -2319,7 +2319,7 @@ static uint16 get_crosshair_color (uint8 color)
 		case  8: return (BUILD_PIXEL(31, 31,  0)); // Yellow
 		case  9: return (BUILD_PIXEL( 0, 31,  0)); // Green
 		case 10: return (BUILD_PIXEL( 0, 31, 31)); // Cyan
-		case 11: return (BUILD_PIXEL( 0, 23, 31)); // Sky
+		case 11: return (BUILD_PIXEL( 0, 23, 31)); // S
 		case 12: return (BUILD_PIXEL( 0,  0, 31)); // Blue
 		case 13: return (BUILD_PIXEL(23,  0, 31)); // Violet
 		case 14: return (BUILD_PIXEL(31,  0, 31)); // Magenta

@@ -371,6 +371,9 @@
     <ClCompile Include="..\bsx.cpp">
       <Filter>Emu</Filter>
     </ClCompile>
+    <ClCompile Include="..\chat.cpp">
+      <Filter>Emu</Filter>
+    </ClCompile>
     <ClCompile Include="..\c4.cpp">
       <Filter>Emu</Filter>
     </ClCompile>
@@ -558,6 +561,9 @@
       <Filter>GUI</Filter>
     </ClCompile>
     <ClCompile Include="kaillera.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="chat_input.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
     <ClCompile Include="render.cpp">
@@ -864,6 +870,9 @@
       <Filter>Emu</Filter>
     </CustomBuild>
     <CustomBuild Include="..\c4.h">
+      <Filter>Emu</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\chat.h">
       <Filter>Emu</Filter>
     </CustomBuild>
     <CustomBuild Include="..\cheats.h">

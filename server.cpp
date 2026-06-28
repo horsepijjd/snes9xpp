@@ -50,6 +50,8 @@
 #include "memmap.h"
 #include "snapshot.h"
 #include "netplay.h"
+#include "movie.h"
+#include "chat.h"
 
 #ifdef __WIN32__
 #define NP_ONE_CLIENT 1
@@ -287,9 +289,12 @@ void S9xNPServerSendChat(const char *message)
         return;
 
     char line [NP_MAX_CHAT_MESSAGE_LEN + 128 + 4];
-    snprintf (line, sizeof (line), "%s: %.*s", S9xNPResolveLocalUsername (),
-               NP_MAX_CHAT_MESSAGE_LEN, message);
+    const char *separator = Settings.UseZSNESFont ? ">" : ": ";
+    snprintf (line, sizeof (line), "%s%s%.*s", S9xNPResolveLocalUsername (),
+               separator, NP_MAX_CHAT_MESSAGE_LEN, message);
     line [sizeof (line) - 1] = 0;
+
+    S9xChatWrite (1, S9xNPResolveLocalUsername (), message);
 
     if (!(Settings.NetPlay && NetPlay.Connected))
         S9xNPDisplayChatMessage (line);
@@ -816,6 +821,7 @@ void S9xNPProcessClient (int c)
                 return;
             }
 
+            S9xChatWrite ((uint8) (c + 1), S9xNPServerClientName (c), (char *) data);
             S9xNPBroadcastChat (c + 1, (char *) data);
             delete[] data;
             break;
@@ -1303,10 +1309,18 @@ bool8 S9xNPStartServer (int port)
     server_continue = TRUE;
     if (S9xNPServerInit (port))
 #ifdef __WIN32__
-        return (_beginthread (S9xNPServerLoop, 0, &p) != (uintptr_t)(~0));
+    {
+        bool8 started = (_beginthread (S9xNPServerLoop, 0, &p) != (uintptr_t)(~0));
+        if (started)
+            NetPlay.ChatActive = TRUE;
+        return started;
+    }
 #else
-    S9xNPServerLoop(NULL);
-    return (TRUE);
+    {
+        NetPlay.ChatActive = TRUE;
+        S9xNPServerLoop(NULL);
+        return (TRUE);
+    }
 #endif
 
     return (FALSE);
@@ -1318,6 +1332,7 @@ void S9xNPStopServer ()
     printf ("SERVER: Stopping server @%ld\n", S9xGetMilliTime () - START);
 #endif
     server_continue = FALSE;
+    NetPlay.ChatActive = FALSE;
     close (NPServer.Socket);
 
     for (int i = 0; i < NP_MAX_CLIENTS; i++)
